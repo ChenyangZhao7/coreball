@@ -35,7 +35,7 @@ EXTRA_ANCHORS = [
 ]
 ALL_ANCHORS = ANCHORS + EXTRA_ANCHORS
 
-BALL_MASS   = 0.50      # 仿真值：球 0.26 + 吊点 0.24。目标吊点 200 g → 0.46 kg，见 docs/03
+BALL_MASS   = 0.50      # 唯一口径：球 0.26 + 吊点 0.24（2026-11-23 定，见 docs/03）
 G           = 9.81
 TETHER_UP   = 0.60      # 供电张紧器给吊点的向上力，N（两股合计）
 T_MIN       = 0.30      # 低于这个就认为线要松了，N

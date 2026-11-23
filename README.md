@@ -174,7 +174,7 @@ Double-click `blender\指挥.bat`, then:
 | Item | Value |
 |---|---|
 | Ball | φ80, ~260 g, fits in one hand |
-| Hub assembly | ~200 g, 360° yaw, 90 mm extension |
+| Hub assembly | ~240 g, 360° yaw, 90 mm extension |
 | Station | 1640 × 1100 × 1900 mm |
 | Cables | 8 candidates (4 load-bearing + 4 idle) + 1 power (twinned) |
 | Current cable lengths | 530 / 1181 / 457 / 1043 mm |
