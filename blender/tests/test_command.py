@@ -10,6 +10,7 @@ from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "tools"))
 
 
 def fail(msg):
@@ -77,6 +78,14 @@ for i in range(1, 9):
     if d > 0.002:
         fail("cable_%d 末端离挂耳 %.2f mm" % (i, d * 1000))
 
+# 线起点必须等于 tension 里的墙平面锚点（1 mm）
+import tension as T
+for i, want in enumerate(T.ALL_ANCHORS, 1):
+    p = bpy.data.objects["cable_%d" % i].data.splines[0].points[0].co
+    got = Vector((p.x, p.y, p.z)) * 1000.0
+    if (got - Vector(want)).length > 1.0:
+        fail("cable_%d 起点不是新锚点 A%d：%s" % (i, i, tuple(got)))
+
 
 # ---------- Task 3：面板文本 ----------
 from cmd_runtime import hud_lines, status_text, status_color
@@ -84,7 +93,8 @@ import tension as T
 
 res = T.solve_selected((-380.0, 520.0, 1460.0))
 joined = "\n".join(hud_lines((-380.0, 520.0, 1460.0), res))
-for want in ["-380", "520", "1460", "555", "1077", "493", "1183", "6.50", "3.22", "支撑 A1 A2 A4 A5"]:
+for want in ["-380", "520", "1460", "744", "1281", "642", "1266",
+             "3.91", "2.64", "支撑 A1 A2 A4 A5"]:
     if want not in joined:
         fail("面板缺 %s" % want)
 
@@ -144,13 +154,13 @@ R.register()
 if R.STATE["hub_mm"] is None:
     fail("register() 后面板还是空的")
 
-# 真正的退化姿势：吊点在四锚点平面 z=1729
+# A1–A4 在新几何里共面；吊点落在这个平面上 → 应判为不可飞（不误报 OK）
 R._last = 0.0
-bpy.data.objects["CMD_TARGET"].location = (-0.760, 0.217, 1.569)
+bpy.data.objects["CMD_TARGET"].location = (-0.380, 0.520, 1.592052)
 bpy.context.view_layer.update()
 R._tick()
-if R.STATE["res"] is not None:
-    fail("锚点平面应判为几何退化")
+if R.STATE["res"] is not None and R.STATE["res"]["closed"]:
+    fail("A1–A4 平面上的吊点被误判为可飞")
 
 # 面板位置必须在标题栏和左上角文字下面
 if R.panel_origin(800)[1] > 800 - 150:

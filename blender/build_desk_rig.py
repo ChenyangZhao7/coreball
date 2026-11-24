@@ -237,23 +237,24 @@ box("monitor_scr", (0, 205, DESK_Z + 200), (596, 2, 336), M_SCREEN, C_DESK)
 
 # ---------------- 四角承力绞盘 ----------------
 DRUM_Z = 45.0
-ARM_Y  = 205.0
+ARM_X  = 205.0
 SHEAVE_R = 17.0
-SH_Z = -4.0
+SH_Z = 116.0       # 出线滑轮抬高 120 mm，在墙平面
 
+# (壁板中心, yaw, 沿墙臂的方向 ±1)
 CORNERS = [
-    ((-760.0, 12.0, 1750.0), 0.0),              # 后墙左
-    ((808.0, 950.0, 1571.0), radians(90)),      # 右墙前，降高
-    ((-300.0, 12.0, 1750.0), 0.0),              # 后墙中
-    ((-808.0, 950.0, 1571.0), radians(-90)),    # 左墙前，降高
-    ((760.0, 12.0, 1571.0), 0.0),               # 后墙右，降高
-    ((-808.0, 200.0, 1750.0), radians(-90)),    # 左墙前
-    ((808.0, 400.0, 1661.0), radians(90)),      # 右墙中
-    ((808.0, 600.0, 1661.0), radians(90)),      # 右墙中
+    ((-555.0,  12.0, 1750.0), 0.0, -1),          # 后墙左
+    (( 808.0, 745.0, 1571.0), radians(90),  1),  # 右墙前
+    ((-95.0,   12.0, 1750.0), 0.0, -1),          # 后墙中
+    ((-808.0, 745.0, 1571.0), radians(-90), -1), # 左墙前
+    (( 555.0,  12.0, 1571.0), 0.0,  1),          # 后墙右
+    ((-808.0, 405.0, 1750.0), radians(-90),  1), # 左墙中
+    (( 808.0, 195.0, 1661.0), radians(90),  1),  # 右墙中
+    (( 808.0, 395.0, 1661.0), radians(90),  1),  # 右墙中
 ]
 CENTER = Vector((0, BOOTH_D * 0.5, 0))
 
-def build_winch(idx, corner, yaw):
+def build_winch(idx, corner, yaw, arm_dir):
     SET_XF((corner[0], corner[1], corner[2]), yaw)
     t = f"W{idx}_"
     # 壁板（贴墙，不再需要转角填块）
@@ -268,22 +269,27 @@ def build_winch(idx, corner, yaw):
     for zz in (DRUM_Z - 13, DRUM_Z + 13):
         cyl(t + f"flange_{int(zz)}", (0, 0, zz), 22, 2, M_ALLOY, C_WINCH, verts=48)
     box(t + "bearing", (0, 0, 14), (50, 50, 20), M_FRAME, C_WINCH, bevel=2)
-    # 横臂 200mm + 出线滑轮
-    box(t + "arm", (0, 113, 22), (34, 186, 14), M_FRAME, C_WINCH, bevel=1.5)
-    for xx in (-18.0, 18.0):
-        box(t + f"cheek_{int(xx)}", (xx, ARM_Y, SH_Z + 4), (5, 38, 44), M_FRAME, C_WINCH, bevel=1)
-    cyl(t + "sheave", (0, ARM_Y, SH_Z), SHEAVE_R, 12, M_STEEL, C_WINCH,
-        direction=(1, 0, 0), verts=44)
-    cyl(t + "loadpin", (0, ARM_Y, SH_Z), 4, 54, M_ALLOY, C_WINCH,
-        direction=(1, 0, 0), verts=20)
-    for xx in (-30.0, 30.0):
-        cyl(t + f"pincap_{int(xx)}", (xx, ARM_Y, SH_Z), 9, 8, M_MOTOR, C_WINCH,
-            direction=(1, 0, 0), verts=24)
-    return T((0, ARM_Y, SH_Z - SHEAVE_R))
+    # 沿墙斜撑 205 mm，把出线滑轮送到墙平面
+    ax = arm_dir * ARM_X
+    strut_len = math.hypot(ARM_X, SH_Z - 22.0)
+    cyl(t + "strut", (ax / 2, 0, (SH_Z + 22.0) / 2), 7, strut_len,
+        M_FRAME, C_WINCH, direction=(ax, 0, SH_Z - 22.0), verts=16)
+    # 出线滑轮（轴沿 Y，滑轮在墙平面，暴露）
+    for yy in (-18.0, 18.0):
+        box(t + f"cheek_{int(yy)}", (ax, yy, SH_Z + 4), (44, 5, 38),
+            M_FRAME, C_WINCH, bevel=1)
+    cyl(t + "sheave", (ax, 0, SH_Z), SHEAVE_R, 12, M_STEEL, C_WINCH,
+        direction=(0, 1, 0), verts=44)
+    cyl(t + "loadpin", (ax, 0, SH_Z), 4, 54, M_ALLOY, C_WINCH,
+        direction=(0, 1, 0), verts=20)
+    for yy in (-30.0, 30.0):
+        cyl(t + f"pincap_{int(yy)}", (ax, yy, SH_Z), 9, 8, M_MOTOR, C_WINCH,
+            direction=(0, 1, 0), verts=24)
+    return T((ax, 0, SH_Z - SHEAVE_R))
 
 exit_pts = []
 for i, c in enumerate(CORNERS, 1):
-    exit_pts.append(build_winch(i, c[0], c[1]))
+    exit_pts.append(build_winch(i, c[0], c[1], c[2]))
 
 SET_XF()
 

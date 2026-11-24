@@ -30,7 +30,6 @@ ACTIONS_PATH = HERE / "actions.json"
 HUB_GAP_MM = 160.0      # 球心 → 吊点中心
 NECK_X, NECK_Y = 0.0, 890.0
 NECK_R = 210.0
-ANCHOR_Z = 1729.0       # 四个锚点同高；吊点落在这个平面上，零空间退化
 BOOTH_HX = 820.0        # 左右墙 x = ±820
 BOOTH_Y0, BOOTH_Y1 = 0.0, 1100.0
 PRACTICAL_Y0 = 250.0    # 实用区：不进入后墙前 250 mm（锚点凸包外）
@@ -485,8 +484,6 @@ def _tick(scene=None, depsgraph=None):
             hw = h.matrix_world.translation
             hub_mm = (hw.x * 1000.0, hw.y * 1000.0, hw.z * 1000.0)
         try:
-            if abs(hub_mm[2] - ANCHOR_Z) < 1.0:
-                raise ValueError("吊点与锚点同高，零空间退化")
             res = T.solve_selected(hub_mm)
         except Exception:
             res = None

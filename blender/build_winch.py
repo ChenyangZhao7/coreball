@@ -158,8 +158,9 @@ M_FLOOR = material("Floor", (0.06, 0.065, 0.07), 0.0, 0.85)
 DRUM_Z   = 45.0
 DRUM_R   = 17.0
 DRUM_W   = 26.0
-ARM_Y    = 205.0
+ARM_X    = 205.0       # 沿墙走线 205 mm
 SHEAVE_R = 17.0
+SH_Z     = 116.0       # 出线滑轮抬高 120 mm，在墙平面
 
 # 壁板
 box("A_plate", (0, 0, 0), (112, 8, 250), M_FRAME, C_A, bevel=2)
@@ -182,30 +183,26 @@ for zz in (DRUM_Z - DRUM_W / 2, DRUM_Z + DRUM_W / 2):
 # 下端轴承座
 box("A_bearing", (0, 0, 14), (50, 50, 20), M_FRAME, C_A, bevel=2)
 
-# 横臂 200mm
-box("A_arm", (0, 113, 22), (34, 186, 14), M_FRAME, C_A, bevel=1.5)
-# 斜撑
-p1 = Vector((0, 12, DRUM_Z - 26))
-p2 = Vector((0, ARM_Y - 40, DRUM_Z - 4))
-mid = (p1 + p2) / 2
+# 沿墙斜撑 205 mm，把出线滑轮送到墙平面
+strut_len = math.hypot(ARM_X, SH_Z - 22.0)
+cyl("A_strut", (ARM_X / 2, 0, (SH_Z + 22.0) / 2), 7, strut_len,
+    M_FRAME, C_A, direction=(ARM_X, 0, SH_Z - 22.0), verts=16)
 
-
-# 出线滑轮（轴沿 X）
-SH_Z = -4.0
-for xx in (-18.0, 18.0):
-    box(f"A_cheek_{int(xx)}", (xx, ARM_Y, SH_Z + 4), (5, 38, 44), M_FRAME, C_A, bevel=1)
-cyl("A_sheave", (0, ARM_Y, SH_Z), SHEAVE_R, 12, M_STEEL, C_A,
-    direction=(1, 0, 0), verts=44)
+# 出线滑轮（轴沿 Y，滑轮在墙平面，暴露）
+for yy in (-18.0, 18.0):
+    box(f"A_cheek_{int(yy)}", (ARM_X, yy, SH_Z + 4), (44, 5, 38), M_FRAME, C_A, bevel=1)
+cyl("A_sheave", (ARM_X, 0, SH_Z), SHEAVE_R, 12, M_STEEL, C_A,
+    direction=(0, 1, 0), verts=44)
 # 负荷销（穿过滑轮的轴，测张力）
-cyl("A_loadpin", (0, ARM_Y, SH_Z), 4, 54, M_ALLOY, C_A, direction=(1, 0, 0), verts=20)
-for xx in (-30.0, 30.0):
-    cyl(f"A_pin_cap_{int(xx)}", (xx, ARM_Y, SH_Z), 9, 8, M_DARK, C_A,
-        direction=(1, 0, 0), verts=24)
+cyl("A_loadpin", (ARM_X, 0, SH_Z), 4, 54, M_ALLOY, C_A, direction=(0, 1, 0), verts=20)
+for yy in (-30.0, 30.0):
+    cyl(f"A_pin_cap_{int(yy)}", (ARM_X, yy, SH_Z), 9, 8, M_DARK, C_A,
+        direction=(0, 1, 0), verts=24)
 
 # 线：卷筒 -> 滑轮顶 -> 滑轮底 -> 下去
-line("A_line_in", (0, DRUM_R, DRUM_Z), (0, ARM_Y, SH_Z + SHEAVE_R), 0.45, M_LINE, C_A)
-line("A_line_wrap", (0, ARM_Y, SH_Z + SHEAVE_R), (0, ARM_Y, SH_Z - SHEAVE_R), 0.45, M_LINE, C_A)
-line("A_line_out", (0, ARM_Y, SH_Z - SHEAVE_R), (0, ARM_Y, SH_Z - 380), 0.45, M_LINE, C_A)
+line("A_line_in", (0, DRUM_R, DRUM_Z), (ARM_X, 0, SH_Z + SHEAVE_R), 0.45, M_LINE, C_A)
+line("A_line_wrap", (ARM_X, 0, SH_Z + SHEAVE_R), (ARM_X, 0, SH_Z - SHEAVE_R), 0.45, M_LINE, C_A)
+line("A_line_out", (ARM_X, 0, SH_Z - SHEAVE_R), (ARM_X, 0, SH_Z - 380), 0.45, M_LINE, C_A)
 
 # 电源与信号线（拖到壁板后面）
 for k, xx in enumerate((-34.0, -24.0, -14.0)):

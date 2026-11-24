@@ -8,9 +8,10 @@ Target space:
   - z <= 1500
 
 Anchors are the sheave exit points on the three walls:
-  back wall  y = 217, x in [-760, 760]
-  left wall  x = -603, y in [150, 950]
-  right wall x =  603, y in [150, 950]
+  back wall  y = 12, x in [-760, 760]
+  left wall  x = -808, y in [150, 950]
+  right wall x =  808, y in [150, 950]
+  sheave exit z = 1670 / 1760 / 1849
 
 Usage:
   python tools/optimize_anchors.py [--sets 60] [--seed 7]
@@ -26,7 +27,7 @@ import tension as T
 
 BACK_X = [-760, -550, -300, 0, 300, 550, 760]
 SIDE_Y = [200, 400, 600, 800, 950]
-Z_CHOICES = [1550, 1640, 1729]
+Z_CHOICES = [1670, 1760, 1849]
 SUBSETS = T.SUBSETS4
 
 TARGET = []
@@ -76,25 +77,25 @@ def random_layout(rng):
         right = sorted(rng.sample(SIDE_Y, 3))
         if spaced(back) and spaced(left) and spaced(right):
             break
-    anchors = ([(x, 217.0, rng.choice(Z_CHOICES)) for x in back]
-               + [(-603.0, y, rng.choice(Z_CHOICES)) for y in left]
-               + [(603.0, y, rng.choice(Z_CHOICES)) for y in right])
+    anchors = ([(x, 12.0, rng.choice(Z_CHOICES)) for x in back]
+               + [(-808.0, y, rng.choice(Z_CHOICES)) for y in left]
+               + [(808.0, y, rng.choice(Z_CHOICES)) for y in right])
     return anchors
 
 
 def current_layout():
     return [
-        (-760.0, 217.0, 1729.0), (760.0, 217.0, 1729.0),
-        (-603.0, 850.0, 1729.0), (603.0, 850.0, 1729.0),
-        (0.0, 217.0, 1729.0), (0.0, 900.0, 1729.0),
-        (-603.0, 535.0, 1729.0), (603.0, 535.0, 1729.0),
+        (-760.0, 12.0, 1849.0), (808.0, 950.0, 1670.0),
+        (-300.0, 12.0, 1849.0), (-808.0, 950.0, 1670.0),
+        (760.0, 12.0, 1670.0), (-808.0, 200.0, 1849.0),
+        (808.0, 400.0, 1760.0), (808.0, 600.0, 1760.0),
     ]
 
 
 def label(anchors):
-    back = sorted(a[0] for a in anchors if abs(a[1] - 217) < 5)
-    left = sorted(a[1] for a in anchors if abs(a[0] + 603) < 5)
-    right = sorted(a[1] for a in anchors if abs(a[0] - 603) < 5)
+    back = sorted(a[0] for a in anchors if abs(a[1] - 12.0) < 5)
+    left = sorted(a[1] for a in anchors if abs(a[0] + 808.0) < 5)
+    right = sorted(a[1] for a in anchors if abs(a[0] - 808.0) < 5)
     return "back x=%s  left y=%s  right y=%s" % (back, left, right)
 
 

@@ -179,7 +179,7 @@ Double-click `blender\指挥.bat`, then:
 | Hub assembly | ~240 g, 360° yaw, 90 mm extension |
 | Station | 1640 × 1100 × 1900 mm |
 | Cables | 8 candidates (4 load-bearing + 4 idle) + 1 power (twinned) |
-| Current cable lengths | 530 / 1181 / 457 / 1043 mm |
+| Current cable lengths | 744 / 1281 / 642 / 1266 mm |
 | Slackest tension | 1.86 N (enough margin) |
 | Flyable zone | 39–40% of the station |
 | Keep-out zone | r210 hard / r305 soft, centred on the neck |

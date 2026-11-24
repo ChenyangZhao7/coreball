@@ -8,22 +8,22 @@ const C = loadCore();
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 test('默认位四根线长', () => {
-  const want = [648.27, 1101.68, 531.27, 545.10];
+  const want = [838.97, 1316.49, 752.24, 710.62];
   C.lineLengths([-380, 520, 1300]).forEach((L, i) => assert.ok(Math.abs(L - want[i]) < 0.5));
 });
 
 test('默认位张力与最松余量', () => {
   const r = C.solveTension([-380, 520, 1300]);
-  const want = [2.05, 1.83, 2.10, 1.83];
+  const want = [1.73, 2.29, 1.73, 2.43];
   r.T.forEach((T, i) => assert.ok(Math.abs(T - want[i]) < 0.02));
-  assert.ok(Math.abs(r.margin - 1.83) < 0.02);
+  assert.ok(Math.abs(r.margin - 1.731) < 0.02);
   assert.equal(r.closed, true);
 });
 
 test('低处贴墙点判为力封闭失效', () => {
-  const r = C.solveTension([-700, 300, 1150]);
+  const r = C.solveTension([-700, 300, 900]);
   assert.equal(r.closed, false);
-  assert.ok(Math.abs(r.margin - 0.22) < 0.02);
+  assert.ok(Math.abs(r.margin - 0.272) < 0.02);
 });
 
 test('球心夹在三面围板内', () => {
@@ -41,7 +41,7 @@ test('8 绳自动选 4 根支撑', () => {
 });
 
 test('自动选绳把低角从失效救回可飞', () => {
-  const p = [-700, 300, 1150];
+  const p = [-700, 300, 900];
   const fixed = C.fixedSupport(p);
   const auto = C.selectSupport(p);
   assert.equal(fixed.closed, false);
