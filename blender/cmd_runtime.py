@@ -23,6 +23,7 @@ sys.path.insert(0, str(HERE.parent / "tools"))
 
 import tension as T  # noqa: E402
 import body as BODYMAP  # noqa: E402
+import telemetry as TEL  # noqa: E402
 
 ACTIONS_PATH = HERE / "actions.json"
 
@@ -34,6 +35,9 @@ BOOTH_HX = 820.0        # 左右墙 x = ±820
 BOOTH_Y0, BOOTH_Y1 = 0.0, 1100.0
 PRACTICAL_Y0 = 250.0    # 实用区：不进入后墙前 250 mm（锚点凸包外）
 BALL_R, WALL_GAP = 40.0, 5.0
+
+TELEMETRY_ADDR = ("127.0.0.1", 4591)
+JOG_TIMEOUT = 0.35      # 控制页每 50 ms 发一次；超过这个时间没包就停
 
 
 def _clamp_walls(x, y):
@@ -249,6 +253,7 @@ def mount(name):
         br.hide_render = not winch
     set_core_light(not winch)
     MOVE["active"] = False
+    _stop_jog()
     goal = STATE.get("goal")
     if goal:
         apply_intent({"intent": goal, "src": "handoff"})
@@ -256,6 +261,20 @@ def mount(name):
 
 
 def apply_intent(msg):
+    if msg.get("intent") == "jog":
+        v = TEL.normalize_jog(msg.get("v"))
+        if v is None:
+            STATE["last"] = "jog 参数不对"
+            return
+        MOVE["active"] = False
+        JOG.update(v=v, t=time.monotonic(), last=0.0)
+        moving = any(v)
+        STATE["last"] = "手动" if moving else "手动停止"
+        if not moving:
+            STATE["goal"] = None
+        set_expression("acting" if moving else "idle")
+        return
+
     try:
         actions = load_actions()
     except Exception:
@@ -265,6 +284,7 @@ def apply_intent(msg):
     kind = r["kind"]
     print("INTENT", msg, "->", kind, r.get("point"), flush=True)
     if kind == "move":
+        _stop_jog()
         begin_move(r["point"], r["style"])
         set_expression("acting")
         STATE["last"] = r["name"]
@@ -274,11 +294,13 @@ def apply_intent(msg):
             STATE["last"] = "换到" + BODYMAP.BODIES[r["body"]]["name"]
     elif kind == "refuse":
         MOVE["active"] = False
+        _stop_jog()
         set_expression("idle")
         STATE["last"] = r["reason"]
         print("REFUSE", r["reason"], flush=True)
     elif kind == "hold":
         MOVE["active"] = False
+        _stop_jog()
         STATE["goal"] = None
         set_expression("idle")
         STATE["last"] = "停"
@@ -347,6 +369,7 @@ EXPRESSIONS = {
 
 def set_expression(name):
     # 灯带去掉后，情绪改由脸窗点阵的发光色/强度表达
+    STATE["expr"] = name
     m = bpy.data.materials.get("Pixel")
     if m is None or not m.use_nodes:
         return None
@@ -384,14 +407,48 @@ def panel_origin(region_h):
 
 # ---------------- 运行时 ----------------
 STATE = {"hub_mm": None, "res": None, "blocked": False, "last": None,
-         "goal": None, "body": "winch", "pos_mm": None}
+         "goal": None, "body": "winch", "pos_mm": None,
+         "ball_mm": None, "expr": "idle"}
 BODY = {"active": "winch"}
 INTENT_Q = queue.Queue(maxsize=64)
 MOVE = {"active": False}
+JOG = {"v": (0.0, 0.0, 0.0), "t": 0.0, "last": 0.0}
+_TELE = {"sock": None}
 _busy = False
 _last = 0.0
 _HANDLER = None
-_TIMERS = {"on": False}
+_TIMERS = {"on": False, "tele": False}
+
+
+def _stop_jog():
+    JOG.update(v=(0.0, 0.0, 0.0), t=0.0, last=0.0)
+
+
+def push_telemetry():
+    """把最新状态发给本机控制桥；没有位置时返回 False。"""
+    if STATE.get("ball_mm") is None:
+        return False
+    snap = TEL.snapshot(
+        STATE.get("ball_mm"), STATE.get("hub_mm"), STATE.get("res"),
+        blocked=STATE.get("blocked", False), last=STATE.get("last"),
+        body=STATE.get("body", "winch"), expr=STATE.get("expr", "idle"),
+        goal=STATE.get("goal"), anchors=T.ALL_ANCHORS, t=time.time())
+    if _TELE["sock"] is None:
+        _TELE["sock"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        _TELE["sock"].sendto(json.dumps(snap, ensure_ascii=False).encode("utf-8"),
+                             TELEMETRY_ADDR)
+        return True
+    except OSError:
+        return False
+
+
+def _telemetry_tick():
+    try:
+        push_telemetry()
+    except Exception as e:
+        print("CoreBall 遥测发送失败:", e, flush=True)
+    return 0.1
 
 
 def _tick(scene=None, depsgraph=None):
@@ -407,7 +464,8 @@ def _tick(scene=None, depsgraph=None):
     try:
         STATE["body"] = BODY["active"]
         if BODY["active"] != "winch":
-            STATE.update(pos_mm=current_ball_mm(), hub_mm=None, res=None, blocked=False)
+            p_mm = current_ball_mm()
+            STATE.update(pos_mm=p_mm, ball_mm=p_mm, hub_mm=None, res=None, blocked=False)
             return
         t = bpy.data.objects.get("CMD_TARGET")
         h = bpy.data.objects.get("HUB_ROOT")
@@ -432,7 +490,7 @@ def _tick(scene=None, depsgraph=None):
             res = T.solve_selected(hub_mm)
         except Exception:
             res = None
-        STATE.update(hub_mm=hub_mm, res=res)
+        STATE.update(ball_mm=(c[0], c[1], c[2]), hub_mm=hub_mm, res=res)
     finally:
         _busy = False
 
@@ -461,8 +519,9 @@ def _draw():
 
 
 def _move_tick():
+    now = time.monotonic()
     if MOVE.get("active"):
-        p = move_at(MOVE, time.monotonic())
+        p = move_at(MOVE, now)
         if BODY["active"] == "winch":
             p = clamp_ball(p)
         t = active_target()
@@ -476,6 +535,23 @@ def _move_tick():
         if not MOVE.get("active"):
             set_expression("idle")
             STATE["goal"] = None
+    elif JOG["t"]:
+        if now - JOG["t"] > JOG_TIMEOUT:
+            # 死手开关：控制页关掉/断线后自己停
+            _stop_jog()
+            set_expression("idle")
+            STATE["goal"] = None
+            STATE["last"] = "手动停止"
+        else:
+            t = active_target()
+            if t is not None:
+                dt = now - JOG["last"] if JOG["last"] else 1.0 / 30.0
+                clamp = clamp_ball if BODY["active"] == "winch" else None
+                nxt, applied = TEL.jog_step(current_ball_mm(), JOG["v"], dt, clamp)
+                t.location = (nxt[0] / 1000.0, nxt[1] / 1000.0, nxt[2] / 1000.0)
+                JOG["last"] = now
+                if BODY["active"] == "rover" and abs(applied[0]) + abs(applied[1]) > 1e-6:
+                    t.rotation_euler = (0.0, 0.0, math.atan2(applied[0], applied[1]))
     return 1.0 / 30.0
 
 
@@ -539,9 +615,13 @@ def register():
         bpy.app.timers.register(_move_tick, persistent=True)
         bpy.app.timers.register(_intent_tick, persistent=True)
         _TIMERS["on"] = True
+    if not _TIMERS["tele"]:
+        bpy.app.timers.register(_telemetry_tick, persistent=True)
+        _TIMERS["tele"] = True
     _last = 0.0
     _tick()
     set_expression("idle")
+    _telemetry_tick()
     print("CoreBall 指挥运行时已启动：拖 CMD_TARGET，或按键 1/2/3/4/5/0")
 
 

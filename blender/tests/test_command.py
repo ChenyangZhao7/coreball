@@ -166,4 +166,71 @@ for name, idx, target in (("wire_1", 1, "tether_sheave"), ("wire_2", 0, "tether_
     if list(hooks[0].vertex_indices) != [idx]:
         fail("%s 的 Hook 索引错了" % name)
 
+# ---------- Task 6：调试遥测与手动 jog ----------
+import json
+import socket
+import time
+
+import telemetry as TEL
+
+R._last = 0.0
+bpy.data.objects["CMD_TARGET"].location = (-0.380, 0.520, 1.300)
+bpy.context.view_layer.update()
+R._tick()
+if R.STATE["ball_mm"] is None or R.STATE["hub_mm"] is None:
+    fail("_tick 没记录球/吊点位置")
+snap = TEL.snapshot(R.STATE["ball_mm"], R.STATE["hub_mm"], R.STATE["res"],
+                    anchors=T.ALL_ANCHORS)
+if len(snap["anchors"]) != 8:
+    fail("遥测没有 8 个锚点")
+if not snap["support"] or not snap["tensions"]:
+    fail("遥测没有支撑/张力")
+
+# 真正发一包 UDP，确认字段和地址都对
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(("127.0.0.1", 0))
+s.settimeout(2.0)
+R.TELEMETRY_ADDR = s.getsockname()
+if not R.push_telemetry():
+    fail("push_telemetry 没发出去")
+pkt = json.loads(s.recvfrom(8192)[0])
+s.close()
+if len(pkt.get("anchors") or []) != 8:
+    fail("UDP 遥测锚点数不对")
+if pkt.get("body") != "winch" or pkt.get("ball") is None:
+    fail("UDP 遥测缺字段")
+
+# 手动 jog：按住 200 mm/s，一帧应往 +X 走约 6.7 mm
+bpy.data.objects["CMD_TARGET"].location = (-0.380, 0.520, 1.300)
+bpy.context.view_layer.update()
+x0 = bpy.data.objects["CMD_TARGET"].location.x
+R.apply_intent({"intent": "jog", "v": [200.0, 0.0, 0.0]})
+if tuple(R.JOG["v"]) != (200.0, 0.0, 0.0):
+    fail("jog 没设置速度")
+R._move_tick()
+x1 = bpy.data.objects["CMD_TARGET"].location.x
+if x1 <= x0 + 0.001:
+    fail("jog 没让球移动：%.4f -> %.4f" % (x0, x1))
+
+# stop 立即停
+R.apply_intent({"intent": "stop"})
+if any(R.JOG["v"]):
+    fail("stop 没停手动 jog")
+
+# 超时死手开关
+R.apply_intent({"intent": "jog", "v": [200.0, 0.0, 0.0]})
+R.JOG["t"] = time.monotonic() - 1.0
+R._move_tick()
+if any(R.JOG["v"]):
+    fail("jog 超时没自己停")
+
+# 贴左墙时不能再往左（安全层夹住）
+bpy.data.objects["CMD_TARGET"].location = (-0.775, 0.520, 1.300)
+bpy.context.view_layer.update()
+R.apply_intent({"intent": "jog", "v": [-400.0, 0.0, 0.0]})
+R._move_tick()
+if bpy.data.objects["CMD_TARGET"].location.x * 1000.0 < -775.01:
+    fail("jog 冲出了左墙")
+R.apply_intent({"intent": "stop"})
+
 print("PASS")

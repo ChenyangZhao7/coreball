@@ -119,17 +119,19 @@ python tools\sim_link.py
 
 The online Wokwi version is in `wokwi\README.md`: one ESP32 and two crossed UART wires.
 
-### 2D / 3D control panel
+### 2D / 3D debug console
 
 Double-click `web\control.bat`; it starts a local bridge and opens <http://127.0.0.1:8010/>.
 
-- Start `blender\指挥.bat` first; the bridge forwards to UDP 4590;
-- In 2D, click the floor to set a target; buttons send up/down/left/right/come/back/stop/look;
-- The ball center is clamped inside the three walls (x ±775, y **250–1055**; the first 250 mm in front of the back wall is outside the practical workspace, see decision 29);
-- **8-rope auto selection**: the top button toggles "8 auto / 4 fixed"; idle ropes are dashed, and the HUD lists the support ropes;
-- Toggle **3D isometric** at the top right; same click-to-target;
-- Body switch (winch/rover), expression switch, height slider;
-- Browsers cannot send UDP directly, so `tools\control_server.py` bridges it on localhost.
+- Start `blender\指挥.bat` first; the bridge forwards commands to UDP 4590;
+- **Hold W/A/S/D to move, Q/E for height, release to stop**; click the floor to go to a point; Space stops;
+- The page shows Blender's **actual position** (ball / hub), not the commanded target;
+- **8 ropes**: the four currently carrying load are highlighted as A1–A8 with per-rope tension, plus the loosest tension, force closure and safety-layer veto;
+- 3D isometric view, height slider, come / back / look / expression;
+- Telemetry goes from Blender to UDP 4591 and is cached by the bridge at `GET /state`; the event log can be exported;
+- The ball center is clamped inside the three walls (x ±775, y **250–1055**; the first 250 mm in front of the back wall is outside the practical workspace, see decision 29).
+
+Manual control has a dead-man switch: if the console stops sending for 0.35 s, Blender stops on its own.
 
 ## Commanding it
 

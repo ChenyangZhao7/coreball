@@ -10,3 +10,11 @@ export function loadCore() {
   vm.runInThisContext(m[1]);
   return globalThis.CoreBall;
 }
+
+export function loadConsole() {
+  const html = readFileSync(new URL('../control.html', import.meta.url), 'utf8');
+  const m = html.match(/<script id="console-core">([\s\S]*?)<\/script>/);
+  if (!m) throw new Error('control.html 里没有 <script id="console-core">');
+  vm.runInThisContext(m[1]);
+  return globalThis.ConsoleCore;
+}
