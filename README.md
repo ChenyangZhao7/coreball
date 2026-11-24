@@ -125,7 +125,7 @@ Double-click `web\control.bat`; it starts a local bridge and opens <http://127.0
 
 - Start `blender\指挥.bat` first; the bridge forwards to UDP 4590;
 - In 2D, click the floor to set a target; buttons send up/down/left/right/come/back/stop/look;
-- The ball center is clamped inside the three walls (x ±775, y **250–1055**; the first 250 mm behind the back wall is outside the practical workspace);
+- The ball center is clamped inside the three walls (x ±775, y **250–1055**; the first 250 mm in front of the back wall is outside the practical workspace, see decision 29);
 - **8-rope auto selection**: the top button toggles "8 auto / 4 fixed"; idle ropes are dashed, and the HUD lists the support ropes;
 - Toggle **3D isometric** at the top right; same click-to-target;
 - Body switch (winch/rover), expression switch, height slider;
