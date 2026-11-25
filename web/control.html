@@ -84,7 +84,7 @@
   <h1>CoreBall · 调试台</h1>
   <span id="dot" title="调试连接状态"></span>
   <span id="link">未连接</span>
-  <button id="mode">3D 视图</button>
+  <button id="mode">斜视图</button>
   <button id="rig">3D 工位</button>
   <span class="spacer"></span>
   <a class="btn" href="command.html">3D 指挥</a>
@@ -750,7 +750,7 @@ cv.addEventListener('pointerup', e => {
 const modeBtn = document.getElementById('mode');
 modeBtn.addEventListener('click', () => {
   state.mode = state.mode === '2d' ? '3d' : '2d';
-  modeBtn.textContent = state.mode === '2d' ? '3D 视图' : '2D 视图';
+  modeBtn.textContent = state.mode === '2d' ? '斜视图' : '俯视图';
   paint();
 });
 
