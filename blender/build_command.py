@@ -194,21 +194,13 @@ def main():
     bpy.context.view_layer.update()
 
     # ---------------- 人 ----------------
+    # 人物模型已在 coreball_rig.blend 里（08_人）；这里只保留朝向用的空物体
     person_coll = bpy.data.collections.get(C_PERSON)
     if person_coll is None:
         person_coll = bpy.data.collections.new(C_PERSON)
         bpy.context.scene.collection.children.link(person_coll)
 
-    gray = material("PERSON", (0.45, 0.47, 0.50), 0.8)
-    mesh_into(sphere("person_head", (0, 0.890, 1.250), 0.095, gray), person_coll)
-    mesh_into(cylinder("person_torso", (0, 0.940, 0.980), 0.130, 0.420, gray), person_coll)
     head = Vector((0, 0.890, 1.250))
-    look = (Vector((-0.380, 0.520, 1.300)) - head).normalized()
-    nose = cone("person_look", head + look * 0.14, 0.032, 0.12, gray)
-    nose.rotation_mode = 'QUATERNION'
-    nose.rotation_quaternion = look.to_track_quat('Z', 'Y')
-    mesh_into(nose, person_coll)
-
     person_head = empty("PERSON_HEAD", head, 0.05, 'PLAIN_AXES')
 
     # ---------------- 命名点（用户可以在 Blender 里拖）----------------

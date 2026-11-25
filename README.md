@@ -127,7 +127,7 @@ Double-click `web\control.bat`; it starts a local bridge and opens <http://127.0
 - **Hold W/A/S/D to move, Q/E for height, release to stop**; click the floor to go to a point; Space stops;
 - The page shows Blender's **actual position** (ball / hub), not the commanded target;
 - **3D ball module**: the real ball model on the right; the face window follows idle / listening / acting, and the ball turns with the hub;
-- **3D rig view**: toggle "3D 工位" at the top to see the booth, ball, hub, all eight cables and the red neck cylinder live; drag to orbit, wheel to zoom, toggle back to the 2D map;
+- **3D rig view**: toggle "3D 工位" at the top to see the booth, ball, hub, all eight cables and the red neck cylinder live; a fictional seated person (about 185 cm / 80 kg proportions) gives scale; drag to orbit, wheel to zoom, toggle back to the 2D map;
 - **8 ropes**: the four currently carrying load are highlighted as A1–A8 with per-rope tension, plus the loosest tension, force closure and safety-layer veto;
 - 3D isometric view, height slider, come / back / look / expression;
 - Telemetry goes from Blender to UDP 4591 and is cached by the bridge at `GET /state`; the event log can be exported;

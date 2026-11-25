@@ -139,6 +139,22 @@ def cyl(name, center, radius, depth, mat, coll, direction=(0, 0, 1), verts=32):
     return ob
 
 
+def sphere(name, center, radius, mat, coll, scale=(1, 1, 1), seg=32, rings=16):
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        segments=seg, ring_count=rings, radius=radius * MM,
+        location=T(center) * MM)
+    ob = bpy.context.object
+    ob.name = name
+    ob.scale = Vector(scale)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    if mat:
+        ob.data.materials.append(mat)
+    for p in ob.data.polygons:
+        p.use_smooth = True
+    _link(ob, coll)
+    return ob
+
+
 def torus(name, center, major, minor, mat, coll, direction=(0, 0, 1), seg=48, mseg=10):
     verts, faces, idx = [], [], []
     for i in range(seg):
@@ -197,6 +213,7 @@ C_CABLE = collection("03_线缆")
 C_HUB   = collection("04_吊点")
 C_BALL  = collection("05_球")
 C_LIGHT = collection("06_灯光相机")
+C_PERSON = collection("08_人")
 
 M_WALL  = material("Wall", (0.84, 0.85, 0.86), 0.0, 0.52)
 M_FRAME = material("Frame", (0.17, 0.18, 0.20), 0.55, 0.40)
@@ -212,6 +229,12 @@ M_DESK  = material("Desk", (0.38, 0.30, 0.23), 0.0, 0.65)
 M_SCREEN= material("Screen", (0.02, 0.03, 0.05), 0.0, 0.20,
                    emission=(0.12, 0.19, 0.30), strength=0.9)
 M_FLOOR = material("Floor", (0.05, 0.055, 0.06), 0.0, 0.85)
+M_SKIN  = material("Skin", (0.72, 0.55, 0.43), 0.0, 0.55)
+M_SHIRT = material("Shirt", (0.26, 0.36, 0.46), 0.0, 0.70)
+M_PANTS = material("Pants", (0.16, 0.18, 0.22), 0.0, 0.75)
+M_HAIR  = material("Hair", (0.08, 0.07, 0.06), 0.0, 0.55)
+M_SHOE  = material("Shoe", (0.08, 0.08, 0.10), 0.2, 0.50)
+M_CHAIR = material("Chair", (0.11, 0.12, 0.14), 0.2, 0.50)
 
 # ---------------- 围板 ----------------
 box("floor", (0, 1300, -10), (5000, 5000, 20), M_FLOOR, C_WALL)
@@ -297,6 +320,64 @@ for i, c in enumerate(CORNERS, 1):
     exit_pts.append(build_winch(i, c[0], c[1], c[2], c[3]))
 
 SET_XF()
+
+# ---------------- 虚构人物：坐姿，约 185 cm / 80 kg 比例 ----------------
+# 只做尺度和遮挡参考，不是真实人物；面朝桌子（-Y），坐在开口侧。
+def limb(name, p1, p2, r, mat):
+    p1, p2 = Vector(p1), Vector(p2)
+    d = p2 - p1
+    return cyl(name, (p1 + p2) / 2, r, d.length, mat, C_PERSON,
+               direction=d, verts=20)
+
+# 椅子
+box("chair_seat", (0, 940, 450), (460, 440, 30), M_CHAIR, C_PERSON, bevel=8)
+box("chair_back", (0, 1030, 760), (460, 30, 460), M_CHAIR, C_PERSON, bevel=8)
+for sx in (-190, 190):
+    for sy in (820, 1040):
+        box(f"chair_leg_{sx}_{sy}", (sx, sy, 225), (30, 30, 450),
+            M_CHAIR, C_PERSON, bevel=5)
+
+# 骨盆 / 躯干 / 肩
+box("person_pelvis", (0, 940, 520), (340, 230, 170), M_PANTS, C_PERSON, bevel=28)
+box("person_torso", (0, 940, 800), (420, 230, 520), M_SHIRT, C_PERSON, bevel=48)
+for sx in (-190, 190):
+    sphere(f"person_shoulder_{sx}", (sx, 940, 1020), 72, M_SHIRT, C_PERSON,
+           scale=(1.0, 0.9, 0.9))
+
+# 手臂：肩 -> 肘 -> 手（手放在桌面上）
+for sx in (-1, 1):
+    sh = (sx * 200, 940, 1010)
+    el = (sx * 235, 760, 810)
+    ha = (sx * 260, 560, 748)
+    limb(f"person_upper_arm_{sx}", sh, el, 45, M_SHIRT)
+    limb(f"person_forearm_{sx}", el, ha, 38, M_SHIRT)
+    sphere(f"person_hand_{sx}", ha, 42, M_SKIN, C_PERSON)
+
+# 腿：髋 -> 膝 -> 踝，脚在地面
+for sx in (-1, 1):
+    hip = (sx * 105, 940, 510)
+    knee = (sx * 105, 600, 490)
+    ankle = (sx * 105, 540, 100)
+    limb(f"person_thigh_{sx}", hip, knee, 75, M_PANTS)
+    limb(f"person_shin_{sx}", knee, ankle, 55, M_PANTS)
+    box(f"person_foot_{sx}", (sx * 105, 500, 45), (90, 230, 70),
+        M_SHOE, C_PERSON, bevel=10)
+
+# 脖子 / 头 / 头发
+cyl("person_neck", (0, 900, 1100), 58, 130, M_SKIN, C_PERSON, verts=32)
+sphere("person_head", (0, 890, 1250), 95, M_SKIN, C_PERSON,
+       scale=(0.85, 0.92, 1.02), seg=40, rings=24)
+sphere("person_hair", (0, 905, 1290), 94, M_HAIR, C_PERSON,
+       scale=(0.84, 0.92, 0.62), seg=40, rings=20)
+sphere("person_hair_back", (0, 940, 1240), 86, M_HAIR, C_PERSON,
+       scale=(0.80, 0.50, 0.80), seg=32, rings=16)
+for sx in (-1, 1):
+    sphere(f"person_ear_{sx}", (sx * 82, 890, 1250), 16, M_SKIN, C_PERSON,
+           scale=(0.6, 0.8, 1.0), seg=20, rings=12)
+    sphere(f"person_eye_{sx}", (sx * 32, 808, 1270), 9, M_MOTOR, C_PERSON,
+           seg=16, rings=10)
+sphere("person_nose", (0, 800, 1240), 11, M_SKIN, C_PERSON, seg=16, rings=10)
+box("person_mouth", (0, 808, 1205), (46, 6, 6), M_MOTOR, C_PERSON, bevel=2)
 
 # ---------------- 吊点 ----------------
 hub = Vector((BALL_POS[0], BALL_POS[1], BALL_POS[2] + HUB_GAP))
