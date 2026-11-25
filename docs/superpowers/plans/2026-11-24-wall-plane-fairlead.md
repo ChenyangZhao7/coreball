@@ -1,5 +1,7 @@
 # 墙平面出线 Implementation Plan
 
+> **2026-11-25 细化**：本计划里的 A2/A4（y=950）与 87.1/96.0 已被决定 31 取代；当前锚点是 A2/A4 (±780, 1100, 1760)、A7/A8 500/800，覆盖 100/99.6。执行记录见 ledger。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 8 个承力绞盘的出线滑轮移到墙平面并抬高 120 mm，滑轮暴露，重算覆盖与张力并更新模型、网页和文档。

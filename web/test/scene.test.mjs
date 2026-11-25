@@ -4,7 +4,7 @@ import { loadCore } from './harness.mjs';
 
 const C = loadCore();
 const cam = C.makeCamera({ yaw: 35, pitch: 22, dist: 3600, target: [-200, 500, 1250] });
-const base = { p: [-380, 520, 1300], ghost: [-380, 520, 1300], ghostBlocked: false, margin: 1.731, closed: true, time: 0, cam };
+const base = { p: [-380, 520, 1300], ghost: [-380, 520, 1300], ghostBlocked: false, margin: 1.794, closed: true, time: 0, cam };
 
 test('四根线，颜色跟随最松余量', () => {
   const s = C.buildScene(base);
@@ -38,8 +38,8 @@ test('HUD 文本里有一切该有的数', () => {
   const t = C.hudText(base);
   assert.match(t, /\(-380, 520, 1300\)/);
   assert.match(t, /839/);
-  assert.match(t, /1\.73/);
-  assert.match(t, /2\.43/);
+  assert.match(t, /1\.79/);
+  assert.match(t, /2\.14/);
 });
 
 test('凸包：正方形 + 内部点返回四个角', () => {

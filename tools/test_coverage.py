@@ -11,13 +11,13 @@ def close(a, b):
 
 
 r = C.report()
-assert close(r["hub_full"], 87.1), r
-assert close(r["hub_practical"], 96.0), r
-assert close(r["ball_full"], 90.0), r
+assert close(r["hub_full"], 100.0), r
+assert close(r["hub_practical"], 100.0), r
+assert close(r["ball_full"], 99.6), r
 assert close(r["ball_practical"], 100.0), r
-assert close(r["hub_green"], 74.6), r
-assert close(r["hub_yellow"], 12.5), r
-assert close(r["hub_red"], 12.9), r
+assert close(r["hub_green"], 85.8), r
+assert close(r["hub_yellow"], 14.2), r
+assert close(r["hub_red"], 0.0), r
 assert close(r["hub_green"] + r["hub_yellow"] + r["hub_red"], 100.0), r
 
 print("PASS")

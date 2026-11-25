@@ -8,22 +8,22 @@ const C = loadCore();
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 test('默认位四根线长', () => {
-  const want = [838.97, 1316.49, 752.24, 710.62];
+  const want = [838.97, 1376.08, 752.24, 841.43];
   C.lineLengths([-380, 520, 1300]).forEach((L, i) => assert.ok(Math.abs(L - want[i]) < 0.5));
 });
 
 test('默认位张力与最松余量', () => {
   const r = C.solveTension([-380, 520, 1300]);
-  const want = [1.73, 2.29, 1.73, 2.43];
+  const want = [1.79, 1.95, 1.79, 2.14];
   r.T.forEach((T, i) => assert.ok(Math.abs(T - want[i]) < 0.02));
-  assert.ok(Math.abs(r.margin - 1.731) < 0.02);
+  assert.ok(Math.abs(r.margin - 1.794) < 0.02);
   assert.equal(r.closed, true);
 });
 
 test('低处贴墙点判为力封闭失效', () => {
   const r = C.solveTension([-700, 300, 900]);
   assert.equal(r.closed, false);
-  assert.ok(Math.abs(r.margin - 0.272) < 0.02);
+  assert.ok(Math.abs(r.margin - 0.242) < 0.02);
 });
 
 test('球心夹在三面围板内', () => {

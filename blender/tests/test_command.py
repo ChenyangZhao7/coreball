@@ -93,8 +93,8 @@ import tension as T
 
 res = T.solve_selected((-380.0, 520.0, 1460.0))
 joined = "\n".join(hud_lines((-380.0, 520.0, 1460.0), res))
-for want in ["-380", "520", "1460", "744", "1281", "642", "1266",
-             "3.91", "2.64", "支撑 A1 A2 A4 A5"]:
+for want in ["-380", "520", "1460", "1331", "645", "766", "661",
+             "2.77", "2.34", "支撑 A2 A3 A4 A6"]:
     if want not in joined:
         fail("面板缺 %s" % want)
 
@@ -156,7 +156,7 @@ if R.STATE["hub_mm"] is None:
 
 # A1–A4 在新几何里共面；吊点落在这个平面上 → 应判为不可飞（不误报 OK）
 R._last = 0.0
-bpy.data.objects["CMD_TARGET"].location = (-0.380, 0.520, 1.592052)
+bpy.data.objects["CMD_TARGET"].location = (-0.380, 0.520, 1.64745)
 bpy.context.view_layer.update()
 R._tick()
 if R.STATE["res"] is not None and R.STATE["res"]["closed"]:
