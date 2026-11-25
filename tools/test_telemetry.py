@@ -42,6 +42,7 @@ s = T.snapshot(
     last="去",
     body="winch",
     expr="acting",
+    yaw=0.7,
     goal="come",
     anchors=ANCHORS,
     t=1700000000.0,
@@ -57,6 +58,7 @@ eq(s["closed"], True, "力封闭")
 eq(s["blocked"], False, "否决")
 eq(s["last"], "去", "最后指令")
 eq(s["expr"], "acting", "表情")
+eq(s["yaw"], 0.7, "朝向")
 eq(s["goal"], "come", "目标")
 eq(s["t"], 1700000000.0, "时间戳")
 eq(len(s["anchors"]), 8, "锚点数量")

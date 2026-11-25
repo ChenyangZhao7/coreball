@@ -34,6 +34,9 @@
   .tag b { color: #8fdcff; font-weight: 600; display: block; }
   .tag span { color: #8b9aab; }
   .tag[hidden], .dot[hidden] { display: none; }
+  body.embed header, body.embed #badge, body.embed #status { display: none; }
+  body.embed #stage { height: 100vh; }
+  body.embed .dot, body.embed .tag { display: none !important; }
 </style>
 </head>
 <body>
@@ -63,6 +66,13 @@ const statusEl = document.getElementById("status");
 const badge = document.getElementById("badge");
 const replayBtn = document.getElementById("replay");
 const rollBtn = document.getElementById("roll");
+
+// ?embed=1 隐藏自带 UI；?debug=rig 进入工位遥测模式
+const PARAMS = new URLSearchParams(location.search);
+const EMBED = PARAMS.get("embed") === "1";
+const DEBUG = PARAMS.get("debug") === "rig";
+const START_MODEL = PARAMS.get("model") || (DEBUG ? "rig" : "ball");
+if (EMBED) document.body.classList.add("embed");
 
 const MODELS = {
   ball:   { src: "models/ball.glb",   badge: "球 · 顶井 4 焊盘 / 底井 6 焊盘 / 3 键槽 / 3 钢片" },
@@ -152,6 +162,10 @@ function rotX(a) {
   const c = Math.cos(a), s = Math.sin(a);
   return new Float32Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]);
 }
+function rotY(a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return new Float32Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]);
+}
 
 // ---------------- GLB 解析 ----------------
 const COMP = { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
@@ -205,6 +219,10 @@ function buildScene(json, bin) {
     world: ident(),
     tr: n.translation ? n.translation.slice() : [0, 0, 0],
   }));
+  nodes.forEach(n => {
+    if (n.name.startsWith("px_") && !n.name.startsWith("px_dot")) n.hidden = true;
+    if (DEBUG && n.name.startsWith("cable_")) n.hidden = true;
+  });
   const meshes = json.meshes.map(mesh => mesh.primitives.map(prim => {
     const pos = readAccessor(json, bin, prim.attributes.POSITION);
     const nor = prim.attributes.NORMAL != null ? readAccessor(json, bin, prim.attributes.NORMAL) : null;
@@ -214,6 +232,7 @@ function buildScene(json, bin) {
   const materials = (json.materials || []).map(m => {
     const p = m.pbrMetallicRoughness || {};
     return {
+      name: m.name || "",
       base: p.baseColorFactor || [0.8, 0.8, 0.8, 1],
       metallic: p.metallicFactor != null ? p.metallicFactor : 1,
       rough: p.roughnessFactor != null ? p.roughnessFactor : 0.5,
@@ -282,6 +301,170 @@ const A = {
   metal: gl.getUniformLocation(prog, "uMetal"),
   rough: gl.getUniformLocation(prog, "uRough"),
 };
+
+// ---------------- 调试台的球模块 / 工位遥测 ----------------
+let expr = "idle", ballYaw = 0;
+let debugLines = [], debugInit = null, debugTele = null;
+
+const EXPR = {
+  idle:      [0.12, 0.72, 1.00, 0.35],
+  listening: [1.00, 0.62, 0.30, 1.60],
+  acting:    [1.00, 0.78, 0.45, 3.00],
+};
+function pixelEmissive() {
+  const e = EXPR[expr] || EXPR.idle;
+  const k = 0.32;
+  return [e[0] * e[3] * k, e[1] * e[3] * k, e[2] * e[3] * k];
+}
+
+// 线渲染（缆绳 / 脖子线框）
+const lvs = `#version 300 es
+in vec3 aPos; uniform mat4 uMVP;
+void main() { gl_Position = uMVP * vec4(aPos, 1.0); }`;
+const lfs = `#version 300 es
+precision highp float;
+uniform vec3 uColor; out vec4 o;
+void main() { o = vec4(uColor, 1.0); }`;
+const lprog = gl.createProgram();
+gl.attachShader(lprog, compile(gl.VERTEX_SHADER, lvs));
+gl.attachShader(lprog, compile(gl.FRAGMENT_SHADER, lfs));
+gl.linkProgram(lprog);
+const L = {
+  pos: gl.getAttribLocation(lprog, "aPos"),
+  mvp: gl.getUniformLocation(lprog, "uMVP"),
+  color: gl.getUniformLocation(lprog, "uColor"),
+};
+const lvao = gl.createVertexArray();
+const lbuf = gl.createBuffer();
+gl.bindVertexArray(lvao);
+gl.bindBuffer(gl.ARRAY_BUFFER, lbuf);
+gl.enableVertexAttribArray(L.pos);
+gl.vertexAttribPointer(L.pos, 3, gl.FLOAT, false, 0, 0);
+gl.bindVertexArray(null);
+
+function drawLineList(vp, lines) {
+  if (!lines.length) return;
+  gl.useProgram(lprog);
+  gl.uniformMatrix4fv(L.mvp, false, vp);
+  gl.bindVertexArray(lvao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, lbuf);
+  gl.lineWidth(1.5);
+  for (const ln of lines) {
+    gl.bufferData(gl.ARRAY_BUFFER,
+      new Float32Array([...ln.a, ...ln.b]), gl.DYNAMIC_DRAW);
+    gl.uniform3fv(L.color, ln.c);
+    gl.drawArrays(gl.LINES, 0, 2);
+  }
+  gl.bindVertexArray(null);
+  gl.useProgram(prog);
+}
+
+// Blender mm -> glTF（Y-up）米
+function toGLB(p) { return [p[0] / 1000, p[2] / 1000, -p[1] / 1000]; }
+function basePos(m) { return [m[12], m[13], m[14]]; }
+function copyBase(m) { return new Float32Array(m); }
+function baseWithYaw(m0, yaw) {
+  const b = copyBase(m0);
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  for (const i of [0, 4, 8]) {
+    const x = m0[i], y = m0[i + 1], z = m0[i + 2];
+    b[i] = c * x + s * z;
+    b[i + 1] = y;
+    b[i + 2] = -s * x + c * z;
+  }
+  return b;
+}
+
+const HUB_RE = /^(hub_|plug_|tether_|slipring_|yaw_|slide_|friction_|breakaway_|lug_)/;
+function initDebug() {
+  if (!scene) return;
+  const ball = scene.nodes.find(n => n.name === "ball_root");
+  const hub = scene.nodes.find(n => n.name === "hub_plate");
+  if (!ball || !hub) return;
+  debugInit = {
+    ballBase: new Float32Array(ball.base),
+    ballPos: basePos(ball.base),
+    hubPos: basePos(hub.base),
+    hub: scene.nodes.filter(n => HUB_RE.test(n.name))
+      .map(n => ({ n, base: new Float32Array(n.base) })),
+  };
+  debugLines = [];
+  camera.target = [0, 1.0, -0.55];
+  camera.dist = 3.4;
+  camera.yaw = 180;
+  camera.pitch = 14;
+}
+
+function applyTelemetry(t) {
+  if (!DEBUG || !t || !t.ball || !t.hub) return;
+  if (!debugInit) initDebug();
+  if (!debugInit) return;
+  debugTele = t;
+  if (t.expr) expr = t.expr;
+  ballYaw = Number(t.yaw || 0);
+
+  const ball = scene.nodes.find(n => n.name === "ball_root");
+  if (ball) {
+    const target = toGLB(t.ball);
+    const b = baseWithYaw(debugInit.ballBase, ballYaw);
+    b[12] = target[0]; b[13] = target[1]; b[14] = target[2];
+    ball.base = b;
+  }
+  const ht = toGLB(t.hub);
+  const hd = [ht[0] - debugInit.hubPos[0], ht[1] - debugInit.hubPos[1], ht[2] - debugInit.hubPos[2]];
+  for (const it of debugInit.hub) {
+    const b = copyBase(it.base);
+    b[12] = it.base[12] + hd[0];
+    b[13] = it.base[13] + hd[1];
+    b[14] = it.base[14] + hd[2];
+    it.n.base = b;
+  }
+
+  debugLines = [];
+  const anchors = t.anchors || [];
+  const support = t.support || [];
+  const tensions = t.tensions || [];
+  const margin = t.margin == null ? 0.3 : t.margin;
+  const color = (m) => m >= 1 ? [0.31, 0.66, 0.50] : m >= 0.30 ? [0.88, 0.69, 0.38] : [0.85, 0.33, 0.31];
+  for (let i = 0; i < anchors.length; i++) {
+    const active = support.includes(i);
+    const ten = active ? (tensions[support.indexOf(i)] ?? margin) : null;
+    debugLines.push({
+      a: toGLB(anchors[i]), b: ht,
+      c: active ? color(ten) : [0.30, 0.36, 0.42],
+    });
+  }
+
+  // 脖子禁区：红色线框圆柱
+  const r = 0.21, cx = 0, cz = -0.89, y0 = 0.0, y1 = 1.9, N = 20;
+  const ring = (y) => {
+    for (let k = 0; k < N; k++) {
+      const a0 = k / N * Math.PI * 2, a1 = (k + 1) / N * Math.PI * 2;
+      debugLines.push({
+        a: [cx + r * Math.cos(a0), y, cz + r * Math.sin(a0)],
+        b: [cx + r * Math.cos(a1), y, cz + r * Math.sin(a1)],
+        c: [0.55, 0.22, 0.20],
+      });
+    }
+  };
+  ring(y0); ring(y1);
+  for (let k = 0; k < 8; k++) {
+    const a = k / 8 * Math.PI * 2;
+    const x = cx + r * Math.cos(a), z = cz + r * Math.sin(a);
+    debugLines.push({ a: [x, y0, z], b: [x, y1, z], c: [0.55, 0.22, 0.20] });
+  }
+}
+
+window.addEventListener("message", e => {
+  const d = e.data || {};
+  if (d.type === "ball") {
+    if (d.expr) expr = d.expr;
+    if (d.yaw != null) ballYaw = Number(d.yaw) || 0;
+  } else if (d.type === "telemetry") {
+    debugTele = d.data;
+    applyTelemetry(d.data);
+  }
+});
 
 function uploadPrimitive(p) {
   p.vao = gl.createVertexArray(); gl.bindVertexArray(p.vao);
@@ -442,8 +625,10 @@ function frame() {
     scene.rootNodes.forEach(i => walk(i, ident()));
 
     scene.nodes.forEach(n => {
-      if (n.mesh == null) return;
-      const w = rollM ? mul(rollM, n.world) : n.world;
+      if (n.mesh == null || n.hidden) return;
+      const extra = (!DEBUG && model === "ball" && ballYaw)
+        ? mul(rotY(ballYaw), rollM || ident()) : rollM;
+      const w = extra ? mul(extra, n.world) : n.world;
       scene.meshes[n.mesh].forEach(p => {
         const m = scene.materials[p.material] || { base: [0.8, 0.8, 0.8], metallic: 0, rough: 0.6, emissive: [0, 0, 0] };
         gl.uniformMatrix4fv(A.mvp, false, mul(vp, w));
@@ -454,8 +639,16 @@ function frame() {
           w[8], w[9], w[10],
         ]);
         gl.uniformMatrix3fv(A.nm, false, nm);
-        gl.uniform3fv(A.base, m.base.slice(0, 3));
-        gl.uniform3fv(A.emissive, m.emissive);
+        let base = m.base.slice(0, 3);
+        let em = m.emissive;
+        if (m.name === "Pixel" && (model === "ball" || DEBUG)) {
+          const e = EXPR[expr] || EXPR.idle;
+          const s = Math.min(1.0, 0.35 + e[3] * 0.22);
+          base = [e[0] * 0.25, e[1] * 0.25, e[2] * 0.25];
+          em = [e[0] * s, e[1] * s, e[2] * s];
+        }
+        gl.uniform3fv(A.base, base);
+        gl.uniform3fv(A.emissive, em);
         gl.uniform1f(A.metal, m.metallic);
         gl.uniform1f(A.rough, m.rough);
         gl.bindVertexArray(p.vao);
@@ -464,6 +657,7 @@ function frame() {
       });
     });
   }
+  if (DEBUG) drawLineList(vp, debugLines);
   if (model === "ball") drawDots(vp, rollM);
   requestAnimationFrame(frame);
 }
@@ -503,10 +697,14 @@ async function selectModel(name) {
     const b = computeBounds(scene);
     camera.target = b.center;
     camera.dist = Math.max(0.16, b.size * 2.4);
-    if (name === "ball") { camera.yaw = 35; camera.pitch = 22; }
+    if (name === "ball") { camera.yaw = EMBED ? 180 : 35; camera.pitch = EMBED ? 8 : 22; }
     else if (name === "insert") { camera.yaw = 25; camera.pitch = 14; }
     else { camera.yaw = 35; camera.pitch = 18; }
-    buildDots(HOTSPOTS[name]);
+    if (DEBUG) {
+      initDebug();
+      if (debugTele) applyTelemetry(debugTele);
+    }
+    if (!EMBED) buildDots(HOTSPOTS[name]);
     animStart = performance.now() / 1000;
     animPlaying = name === "insert";
     statusEl.textContent = name === "insert" ? "30 帧压入" : "滚轮缩放";
@@ -529,7 +727,7 @@ rollBtn.addEventListener("click", () => {
 });
 
 resize();
-selectModel("ball");
+selectModel(START_MODEL);
 requestAnimationFrame(frame);
 </script>
 </body>

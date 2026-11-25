@@ -423,6 +423,11 @@ def _stop_jog():
     JOG.update(v=(0.0, 0.0, 0.0), t=0.0, last=0.0)
 
 
+def _ball_yaw():
+    br = bpy.data.objects.get("ball_root")
+    return float(br.rotation_euler.z) if br is not None else 0.0
+
+
 def push_telemetry():
     """把最新状态发给本机控制桥；没有位置时返回 False。"""
     if STATE.get("ball_mm") is None:
@@ -431,7 +436,8 @@ def push_telemetry():
         STATE.get("ball_mm"), STATE.get("hub_mm"), STATE.get("res"),
         blocked=STATE.get("blocked", False), last=STATE.get("last"),
         body=STATE.get("body", "winch"), expr=STATE.get("expr", "idle"),
-        goal=STATE.get("goal"), anchors=T.ALL_ANCHORS, t=time.time())
+        yaw=_ball_yaw(), goal=STATE.get("goal"), anchors=T.ALL_ANCHORS,
+        t=time.time())
     if _TELE["sock"] is None:
         _TELE["sock"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:

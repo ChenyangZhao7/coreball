@@ -53,7 +53,7 @@ def _vec(p, digits=2):
 
 
 def snapshot(ball_mm, hub_mm, res=None, *, blocked=False, last=None,
-             body="winch", expr="idle", goal=None, anchors=None, t=None):
+             body="winch", expr="idle", yaw=0.0, goal=None, anchors=None, t=None):
     """一帧调试遥测。res 为 tension.solve_selected() 的结果，可为 None。"""
     out = {
         "t": float(t) if t is not None else None,
@@ -64,6 +64,7 @@ def snapshot(ball_mm, hub_mm, res=None, *, blocked=False, last=None,
         "last": last,
         "goal": goal,
         "expr": expr,
+        "yaw": round(float(yaw), 4),
         "anchors": [_vec(a) for a in (anchors or [])],
         "support": [],
         "support_names": [],

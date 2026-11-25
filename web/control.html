@@ -28,6 +28,12 @@
   main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 336px; }
   #stage { position: relative; min-width: 0; }
   canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  #rig3d { position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
+           background: #0a0e12; display: none; }
+  #stage.rig #rig3d { display: block; }
+  #stage.rig #cv, #stage.rig #banner, #stage.rig #hint { display: none; }
+  .ball3d { width: 100%; height: 228px; border: 1px solid #1a242e; border-radius: 10px;
+            background: #0b1016; display: block; }
   #hint { position: absolute; left: 14px; bottom: 12px; color: var(--dim);
           font-size: 12px; pointer-events: none; }
   #banner { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
@@ -79,6 +85,7 @@
   <span id="dot" title="调试连接状态"></span>
   <span id="link">未连接</span>
   <button id="mode">3D 视图</button>
+  <button id="rig">3D 工位</button>
   <span class="spacer"></span>
   <a class="btn" href="command.html">3D 指挥</a>
   <a class="btn" href="viewer.html">模型查看</a>
@@ -87,11 +94,16 @@
 <main>
   <section id="stage">
     <canvas id="cv"></canvas>
+    <iframe id="rig3d" title="3D 工位"></iframe>
     <div id="hint">按住 W/A/S/D 平移 · Q/E 升降 · 松开即停 ｜ 点地面定位 ｜ 空格停</div>
     <div id="banner"></div>
   </section>
 
   <aside>
+    <div class="group">
+      <h3>球模块 <span class="val" id="ballmode">3D 预览</span></h3>
+      <iframe id="ball3d" class="ball3d" src="viewer.html?embed=1&model=ball" title="3D 球模块"></iframe>
+    </div>
     <div class="group">
       <h3>手动 <span class="val" id="speedv">240 mm/s</span></h3>
       <input id="speed" type="range" min="80" max="400" step="20" value="240">
@@ -200,6 +212,10 @@ const speedV = document.getElementById('speedv');
 const zEl = document.getElementById('z');
 const zv = document.getElementById('zv');
 const logEl = document.getElementById('log');
+const ball3d = document.getElementById('ball3d');
+const rig3d = document.getElementById('rig3d');
+const rigBtn = document.getElementById('rig');
+let rigOn = false, rigLoaded = false;
 
 const NEAR = [-380, 520, 1300];
 const HOME = [-430, 760, 1420];
@@ -463,6 +479,36 @@ function paint() {
 }
 
 // ---------------- 遥测 ----------------
+function post3D(t) {
+  if (!t) return;
+  try {
+    if (ball3d.contentWindow)
+      ball3d.contentWindow.postMessage({ type: 'ball', expr: t.expr, yaw: t.yaw }, '*');
+    if (rig3d.contentWindow)
+      rig3d.contentWindow.postMessage({ type: 'telemetry', data: t }, '*');
+  } catch (_) {}
+}
+
+function setRig(on) {
+  rigOn = on;
+  document.getElementById('stage').classList.toggle('rig', on);
+  rigBtn.classList.toggle('on', on);
+  rigBtn.textContent = on ? '2D 地图' : '3D 工位';
+  if (on) {
+    if (!rigLoaded) {
+      rig3d.src = 'viewer.html?embed=1&debug=rig';
+      rigLoaded = true;
+    }
+    post3D(state.tele);
+  } else {
+    paint();
+  }
+}
+
+rigBtn.addEventListener('click', () => setRig(!rigOn));
+rig3d.addEventListener('load', () => post3D(state.tele));
+ball3d.addEventListener('load', () => post3D(state.tele));
+
 function setLink(kind, text) {
   dot.className = kind;
   linkEl.textContent = text;
@@ -481,6 +527,7 @@ async function poll() {
     if (j.ok) {
       state.tele = j;
       setLink(j.stale ? 'warn' : 'on', j.stale ? '遥测超时' : '实时');
+      post3D(j);
       if (!state.zDrag && j.ball) {
         state.z = j.ball[2];
         zEl.value = Math.round(state.z);
