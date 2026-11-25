@@ -50,14 +50,17 @@ test('自动选绳把低角从失效救回可飞', () => {
 });
 
 test('与 tools/tension.py 逐点一致（线长 < 2 mm，张力 < 0.05 N）', () => {
-  for (const p of [[-380, 520, 1300], [0, 890, 1450], [-700, 300, 1150]]) {
+  // CLI 输入是球心；Python 与运行时一样按吊点（球心 +160）做 8 选 4
+  for (const p of [[-380, 520, 1300], [0, 700, 1450], [-700, 300, 1150]]) {
     const out = execFileSync('python', ['tools/tension.py', ...p.map(String)], { cwd: ROOT, encoding: 'utf8' });
-    const py = [...out.matchAll(/L=\s*([\d.]+) mm\s+T=\s*(-?[\d.]+) N/g)];
+    const py = [...out.matchAll(/A(\d)\s+L=\s*([\d.]+) mm\s+T=\s*(-?[\d.]+) N/g)];
     assert.equal(py.length, 4);
-    const r = C.solveTension(p);
-    C.lineLengths(p).forEach((L, i) => {
-      assert.ok(Math.abs(L - Number(py[i][1])) <= 2, `线长 ${i + 1}`);
-      assert.ok(Math.abs(r.T[i] - Number(py[i][2])) <= 0.05, `张力 ${i + 1}`);
+    const hub = [p[0], p[1], p[2] + 160];
+    const r = C.selectSupport(hub);
+    py.forEach((m, k) => {
+      assert.equal(Number(m[1]) - 1, r.support[k], `支撑 ${k + 1}`);
+      assert.ok(Math.abs(r.lengths[k] - Number(m[2])) <= 2, `线长 ${k + 1}`);
+      assert.ok(Math.abs(r.T[k] - Number(m[3])) <= 0.05, `张力 ${k + 1}`);
     });
   }
 });

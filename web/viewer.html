@@ -63,6 +63,10 @@
 const canvas = document.getElementById("cv");
 const gl = canvas.getContext("webgl2", { antialias: true, alpha: false, preserveDrawingBuffer: true });
 const statusEl = document.getElementById("status");
+if (!gl) {
+  statusEl.textContent = "当前浏览器不支持 WebGL2，无法预览模型";
+  throw new Error("WebGL2 unavailable");
+}
 const badge = document.getElementById("badge");
 const replayBtn = document.getElementById("replay");
 const rollBtn = document.getElementById("roll");
@@ -682,6 +686,13 @@ canvas.addEventListener("wheel", e => {
 async function selectModel(name) {
   const cfg = MODELS[name];
   if (!cfg) return;
+  // 释放上一个模型的 GPU 资源，避免反复切换时累积
+  if (scene) scene.meshes.forEach(prims => prims.forEach(p => {
+    if (p.vao) gl.deleteVertexArray(p.vao);
+    if (p.bufPos) gl.deleteBuffer(p.bufPos);
+    if (p.bufNor) gl.deleteBuffer(p.bufNor);
+    if (p.bufIdx) gl.deleteBuffer(p.bufIdx);
+  }));
   model = name;
   rollAngle = 0; rollT0 = 0;
   rollBtn.hidden = name !== "ball";

@@ -78,6 +78,10 @@ def parse_move(text):
     return clean, (intent if intent in ALLOWED else None)
 
 
+# 口令前一个或两个字是否定词时，这句不是指令（「不停」「别动」「不要动」）
+_NEG = ("不", "别", "甭", "莫")
+
+
 def phrase_intent(user, table=None):
     """用户原话里有没有口令；命中就直接动，不依赖模型记不记得打标签。"""
     if table is None:
@@ -87,8 +91,17 @@ def phrase_intent(user, table=None):
             return None
         table = (data.get("bindings") or {}).get("voice") or {}
     for phrase, name in table.items():
-        if phrase and phrase in user:
-            return name if name in ALLOWED else None
+        if not phrase:
+            continue
+        start = 0
+        while True:
+            i = user.find(phrase, start)
+            if i < 0:
+                break
+            prefix = user[max(0, i - 2):i]
+            if not any(n in prefix for n in _NEG):
+                return name if name in ALLOWED else None
+            start = i + 1
     return None
 
 

@@ -32,11 +32,12 @@
 
 <script id="core">
 // ===== 纯数学核心：无 DOM 依赖，测试直接从这里加载 =====
-const ANCHORS = [[-760, 12, 1849], [780, 1100, 1760], [-300, 12, 1849], [-780, 1100, 1760]];
-const MASS_KG = 0.50, TETHER_UP = 0.60, T_MIN = 0.30, T_MAX = 20.0; // 唯一口径：球 0.26 + 吊点 0.24，见 docs/03
+// 参数默认值与 tools/tension.py 一致；web/params.json 存在时由 setParams 覆盖（单一来源）
+let ANCHORS = [[-760, 12, 1849], [780, 1100, 1760], [-300, 12, 1849], [-780, 1100, 1760]];
+let MASS_KG = 0.50, TETHER_UP = 0.60, T_MIN = 0.30, T_MAX = 20.0; // 唯一口径：球 0.26 + 吊点 0.24，见 docs/03
 const G = 9.81;
 const NECK = { x: 0, y: 890, r: 210 };
-const DEFAULT_P = [-380, 520, 1300];
+let DEFAULT_P = [-380, 520, 1300];
 const BOOTH = { hx: 820, y0: 0, y1: 1100, y0p: 250, r: 40, gap: 5 };
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -126,19 +127,20 @@ function solveTension(p) {
 }
 
 // 8 个候选锚点：原 4 角 + 后中 / 前中 / 左右中
-const EXTRA_ANCHORS = [
+let EXTRA_ANCHORS = [
   [760, 12, 1670], [-808, 200, 1849], [808, 500, 1760], [808, 800, 1760],
 ];
-const ALL_ANCHORS = ANCHORS.concat(EXTRA_ANCHORS);
+let ALL_ANCHORS = ANCHORS.concat(EXTRA_ANCHORS);
 
-const SUBSETS4 = (() => {
+function buildSubsets() {
   const out = [];
   for (let a = 0; a < ALL_ANCHORS.length - 3; a++)
     for (let b = a + 1; b < ALL_ANCHORS.length - 2; b++)
       for (let c = b + 1; c < ALL_ANCHORS.length - 1; c++)
         for (let d = c + 1; d < ALL_ANCHORS.length; d++) out.push([a, b, c, d]);
   return out;
-})();
+}
+let SUBSETS4 = buildSubsets();
 
 // 机器选绳：挑 4 根都绷得住、余量最大的；剩下 4 根当闲散绳
 function selectSupport(p) {
@@ -167,6 +169,31 @@ function selectSupportCached(p) {
   return selCache.r;
 }
 
+// web/params.json（tools/export_params.py 生成）覆盖内置默认值
+function setParams(p) {
+  if (!p || typeof p !== 'object') return false;
+  if (Array.isArray(p.anchors) && p.anchors.length >= 4 &&
+      p.anchors.every(a => Array.isArray(a) && a.length === 3)) {
+    ANCHORS = p.anchors.slice(0, 4).map(a => a.map(Number));
+    EXTRA_ANCHORS = p.anchors.slice(4).map(a => a.map(Number));
+    ALL_ANCHORS = ANCHORS.concat(EXTRA_ANCHORS);
+    SUBSETS4 = buildSubsets();
+    selCache = { key: "", r: null };
+  }
+  if (p.mass_kg > 0) MASS_KG = Number(p.mass_kg);
+  if (p.tether_up != null) TETHER_UP = Number(p.tether_up);
+  if (p.t_min > 0) T_MIN = Number(p.t_min);
+  if (p.t_max > 0) T_MAX = Number(p.t_max);
+  if (p.vmax > 0) VMAX = Number(p.vmax);
+  if (p.rebound != null) SETTLE_AMP = Number(p.rebound);
+  if (p.settle > 0) SETTLE_DUR = Number(p.settle);
+  if (p.neck) Object.assign(NECK, p.neck);
+  if (p.booth) Object.assign(BOOTH, p.booth);
+  if (Array.isArray(p.default_ball) && p.default_ball.length === 3)
+    DEFAULT_P = p.default_ball.map(Number);
+  return true;
+}
+
 function fixedSupport(p) {
   const r = solveSubset(p, [0, 1, 2, 3], ALL_ANCHORS);
   r.support = [0, 1, 2, 3];
@@ -179,11 +206,10 @@ function currentSupport(state) {
   return state.auto === true ? selectSupportCached(state.p) : fixedSupport(state.p);
 }
 
-// ===== 运动：五次多项式 S 曲线 + 落定回退 =====
-const VMAX = 356;            // mm/s
-const SETTLE_AMP = 4.0;      // mm
-const SETTLE_ZETA = 4.5;
-const SETTLE_W = 2 * Math.PI * 1.2;
+// ===== 运动：五次多项式 S 曲线 + 落定越冲（与 blender/cmd_runtime.py 同一模型）=====
+let VMAX = 356;            // mm/s
+let SETTLE_AMP = 4.0;      // mm，到位后越冲再收住
+let SETTLE_DUR = 0.4;      // s
 
 function moveProfile(d) {
   if (!(d > 0)) return { T: 0, pos: () => 0, vel: () => 0 };
@@ -191,24 +217,28 @@ function moveProfile(d) {
 
   const pos = t => {
     if (t <= 0) return 0;
-    const u = Math.min(t, T) / T;
-    let x = d * (10 * u ** 3 - 15 * u ** 4 + 6 * u ** 5);
-    if (t > 0.92 * T) {
-      const dt = t - 0.92 * T, e = Math.exp(-SETTLE_ZETA * dt);
-      x += -SETTLE_AMP * e * Math.cos(SETTLE_W * dt);
+    if (t < T) {
+      const u = t / T;
+      return d * (10 * u ** 3 - 15 * u ** 4 + 6 * u ** 5);
     }
-    return x;
+    if (t <= T + SETTLE_DUR) {
+      // 平滑越冲：起点和终点都是 0 斜率，峰值就是 SETTLE_AMP
+      return d + 0.5 * SETTLE_AMP * (1 - Math.cos(2 * Math.PI * (t - T) / SETTLE_DUR));
+    }
+    return d;
   };
 
   const vel = t => {
     if (t <= 0) return 0;
-    const u = Math.min(t, T) / T;
-    let v = t >= T ? 0 : d * (30 * u ** 2 - 60 * u ** 3 + 30 * u ** 4) / T;
-    if (t > 0.92 * T) {
-      const dt = t - 0.92 * T, e = Math.exp(-SETTLE_ZETA * dt);
-      v += SETTLE_AMP * e * (SETTLE_ZETA * Math.cos(SETTLE_W * dt) + SETTLE_W * Math.sin(SETTLE_W * dt));
+    if (t < T) {
+      const u = t / T;
+      return d * (30 * u ** 2 - 60 * u ** 3 + 30 * u ** 4) / T;
     }
-    return v;
+    if (t <= T + SETTLE_DUR) {
+      return 0.5 * SETTLE_AMP * (2 * Math.PI / SETTLE_DUR) *
+             Math.sin(2 * Math.PI * (t - T) / SETTLE_DUR);
+    }
+    return 0;
   };
 
   return { T, pos, vel };
@@ -434,6 +464,8 @@ globalThis.CoreBall = {
   makeCamera, project, rayFromScreen, planeHit, pickTarget,
   buildScene, cableColor, hudText, hull2d,
   dragTarget, initialState, chaseStep,
+  setParams,
+  motion: () => ({ vmax: VMAX, rebound: SETTLE_AMP, settle: SETTLE_DUR }),
 };
 </script>
 
@@ -473,6 +505,19 @@ function refreshCam() {
 
 const state = initialState();
 refreshCam();
+
+// web/params.json（tools/export_params.py 生成）：锚点/质量/阈值改一处，网页自动跟上
+fetch('params.json', { cache: 'no-store' })
+  .then(r => r.ok ? r.json() : null)
+  .then(p => {
+    if (p && CoreBall.setParams(p)) {
+      const r = currentSupport(state);
+      state.supportR = r; state.margin = r.margin; state.closed = r.closed;
+      hud.innerHTML = hudText(state);
+      paint();
+    }
+  })
+  .catch(() => {});
 
 let mode = 'idle';          // idle | chase | profile
 let prof = null;
@@ -714,7 +759,7 @@ function tick(now) {
       prof.p0[1] + (prof.p1[1] - prof.p0[1]) * u,
       prof.p0[2] + (prof.p1[2] - prof.p0[2]) * u,
     ]);
-    if (t > 2.2 * prof.prof.T + 0.4) {
+    if (t > prof.prof.T + CoreBall.motion().settle + 0.1) {
       state.p = prof.p1.slice();
       state.v = [0, 0, 0];
       prof = null;

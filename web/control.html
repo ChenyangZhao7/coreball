@@ -39,7 +39,7 @@
   #banner { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
             color: #8b9aab; font-size: 13px; text-align: center; pointer-events: none;
             background: rgba(10,14,18,.72); border: 1px solid #1d2732; border-radius: 10px;
-            padding: 12px 18px; display: none; }
+            padding: 12px 18px; display: none; white-space: pre-line; }
   aside { border-left: 1px solid var(--line); background: var(--panel);
           padding: 12px; overflow: auto; }
   .group { margin-bottom: 14px; }
@@ -123,6 +123,7 @@
       <div class="kv"><span>球</span><b id="ball">—</b></div>
       <div class="kv"><span>吊点</span><b id="hub">—</b></div>
       <div class="kv"><span>目标</span><b id="tgt">—</b></div>
+      <div class="kv"><span>安全修正</span><b id="req">—</b></div>
       <div class="kv"><span>遥测</span><b id="age">—</b></div>
       <div class="kv"><span>指令</span><b id="last">—</b></div>
     </div>
@@ -177,6 +178,30 @@ const KEY_DIR = {
 const MAX_SPEED = 400;
 const MIN_SPEED = 80;
 
+// 参数默认值与 tools/tension.py 一致；web/params.json 存在时由 applyParams 覆盖
+const PARAMS = {
+  anchors: null,   // null → app 用内置 FALLBACK_ANCHORS
+  tMin: 0.30,
+  neck: { x: 0, y: 890, r: 210 },
+  floor: { x: 775, y0: 250, y1: 1055 },
+};
+
+function applyParams(p) {
+  if (!p || typeof p !== 'object') return false;
+  if (Array.isArray(p.anchors) && p.anchors.length === 8) PARAMS.anchors = p.anchors;
+  if (p.t_min > 0) PARAMS.tMin = Number(p.t_min);
+  if (p.neck) Object.assign(PARAMS.neck, p.neck);
+  if (p.booth) {
+    const m = (p.booth.ball_r || 40) + (p.booth.gap || 5);
+    PARAMS.floor = {
+      x: (p.booth.hx || 820) - m,
+      y0: Math.max(p.booth.y0p || 250, (p.booth.y0 || 0) + m),
+      y1: (p.booth.y1 || 1100) - m,
+    };
+  }
+  return true;
+}
+
 function jogVector(keys, speed) {
   speed = Math.max(0, Math.min(MAX_SPEED, Number(speed) || 0));
   let v = [0, 0, 0];
@@ -191,16 +216,17 @@ function jogVector(keys, speed) {
 }
 
 function clampFloor(x, y) {
-  return [Math.max(-775, Math.min(775, x)), Math.max(250, Math.min(1055, y))];
+  return [Math.max(-PARAMS.floor.x, Math.min(PARAMS.floor.x, x)),
+          Math.max(PARAMS.floor.y0, Math.min(PARAMS.floor.y1, y))];
 }
 
-globalThis.ConsoleCore = { KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor };
+globalThis.ConsoleCore = { KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, PARAMS, applyParams };
 </script>
 
 <script>
 // ===== 应用：绘制、遥测、键盘 / 按钮操控 =====
 (() => {
-const { jogVector, clampFloor } = ConsoleCore;
+const { jogVector, clampFloor, PARAMS } = ConsoleCore;
 
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -225,8 +251,6 @@ const FALLBACK_ANCHORS = [
   [-760, 12, 1849], [780, 1100, 1760], [-300, 12, 1849], [-780, 1100, 1760],
   [760, 12, 1670], [-808, 200, 1849], [808, 500, 1760], [808, 800, 1760],
 ];
-const T_MIN = 0.30;
-
 const state = {
   mode: '2d',
   tele: null,
@@ -309,13 +333,13 @@ function poly(pts, fill, stroke) {
 function cableColor(margin) {
   if (margin == null) return '#5f6f7c';
   if (margin >= 1.0) return '#4fa87f';
-  if (margin >= T_MIN) return '#e0b060';
+  if (margin >= PARAMS.tMin) return '#e0b060';
   return '#d9534f';
 }
 
 function anchorsNow() {
   const a = state.tele && state.tele.anchors;
-  return a && a.length ? a : FALLBACK_ANCHORS;
+  return (a && a.length) ? a : (PARAMS.anchors || FALLBACK_ANCHORS);
 }
 
 function paint() {
@@ -379,7 +403,7 @@ function paint() {
   }
 
   // 脖子禁区
-  const NX = 0, NY = 890, NR = 210;
+  const NX = PARAMS.neck.x, NY = PARAMS.neck.y, NR = PARAMS.neck.r;
   if (state.mode === '2d') {
     const c = proj(NX, NY, 0);
     ctx.beginPath(); ctx.arc(c[0], c[1], NR * view().k, 0, Math.PI * 2);
@@ -555,6 +579,9 @@ function renderPanel() {
   document.getElementById('ball').textContent = fmtVec(t && t.ball);
   document.getElementById('hub').textContent = fmtVec(t && t.hub);
   document.getElementById('tgt').textContent = fmtVec(state.target);
+  const req = document.getElementById('req');
+  req.textContent = (t && t.requested) ? fmtVec(t.requested) + ' → 已夹取' : '—';
+  req.className = (t && t.requested) ? 'bad' : '';
   const age = document.getElementById('age');
   age.textContent = t ? (t.age_ms + ' ms' + (t.stale ? '（超时）' : '')) : '—';
   age.className = t ? (t.stale ? 'bad' : 'good') : '';
@@ -587,7 +614,7 @@ function renderPanel() {
 
   const margin = document.getElementById('margin');
   margin.textContent = t && t.margin != null ? t.margin.toFixed(2) + ' N' : '—';
-  margin.className = t && t.margin != null ? (t.margin >= T_MIN ? 'good' : 'bad') : '';
+  margin.className = t && t.margin != null ? (t.margin >= PARAMS.tMin ? 'good' : 'bad') : '';
 
   const closed = document.getElementById('closed');
   closed.textContent = t && t.closed != null ? (t.closed ? 'OK' : '失效') : '—';
@@ -766,6 +793,11 @@ document.getElementById('clear').addEventListener('click', e => {
 
 // ---------------- 启动 ----------------
 log('调试台就绪。先开 Blender「指挥」场景，再运行 tools/control_server.py。');
+// web/params.json（tools/export_params.py 生成）：锚点/阈值改一处，网页自动跟上
+fetch('params.json', { cache: 'no-store' })
+  .then(r => r.ok ? r.json() : null)
+  .then(p => { if (p && ConsoleCore.applyParams(p)) paint(); })
+  .catch(() => {});
 renderPanel();
 fit();
 poll();

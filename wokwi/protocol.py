@@ -1,6 +1,7 @@
 """CoreBall protocol codec for Wokwi MicroPython (ESP32).
 
 Frame: A5 5A | VER | TYPE | LEN | PAYLOAD | CRC16-CCITT-FALSE.
+CRC 与所有多字节字段一律小端（docs/04 §6）。
 Keep in sync with tools/protocol.py.
 """
 import struct
@@ -35,7 +36,7 @@ def encode(ftype, payload=b"", ver=PROTO_VER):
     if len(payload) > 64:
         raise ValueError("payload > 64")
     body = bytes([ver, ftype, len(payload)]) + payload
-    return MAGIC + body + struct.pack(">H", crc16(body))
+    return MAGIC + body + struct.pack("<H", crc16(body))
 
 
 class Frame:
@@ -63,7 +64,7 @@ def decode(buf):
     if len(buf) < need:
         return None, buf, "short"
     body = buf[2:5 + ln]
-    got = struct.unpack(">H", buf[5 + ln:need])[0]
+    got = struct.unpack("<H", buf[5 + ln:need])[0]
     if crc16(body) != got:
         return None, buf[2:], "crc"
     return Frame(ver, ftype, body[3:]), buf[need:], None

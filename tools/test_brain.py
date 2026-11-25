@@ -24,6 +24,14 @@ eq(brain.phrase_intent("你过来一下", t), "come", "口令命中")
 eq(brain.phrase_intent("今天怎么样", t), None, "没口令")
 eq(brain.phrase_intent("随便聊聊", t), None, "未知动作忽略")
 
+# ---------- 否定词不算口令 ----------
+t2 = {"停": "stop", "过来": "come", "上车": "mount_rover"}
+eq(brain.phrase_intent("别停", t2), None, "别停 ≠ 停")
+eq(brain.phrase_intent("不要过来", t2), None, "不要过来 ≠ 过来")
+eq(brain.phrase_intent("不上车", t2), None, "不上车 ≠ 上车")
+eq(brain.phrase_intent("停下", t2), "stop", "停下仍然命中")
+eq(brain.phrase_intent("你先过来再説", t2), "come", "正常口令不受影响")
+
 # ---------- 拼消息 ----------
 msgs = brain.build_messages("P", "记得你怕吵", [{"user": "a", "assistant": "b"}], "c")
 eq(msgs[0]["role"], "system", "system 在最前")

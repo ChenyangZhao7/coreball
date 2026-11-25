@@ -112,7 +112,7 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
-        if self.path != "/intent":
+        if self.path.split("?", 1)[0] != "/intent":
             self.send_error(404)
             return
         try:

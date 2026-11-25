@@ -20,12 +20,15 @@ test('前 0.5 秒只走 6mm，99% 在 5.38 秒', () => {
   assert.ok(Math.abs(t99 - 5.38) < 0.1, `t99=${t99}`);
 });
 
-test('落定时回退 4mm 再收住', () => {
+test('落定时越冲 4mm 再收住（与 Blender 运行时同一模型）', () => {
   const d = 400, m = C.moveProfile(d);
-  let dip = 0;
-  for (let t = 0.9 * m.T; t <= 2.5 * m.T; t += 0.005) dip = Math.max(dip, d - m.pos(t));
-  assert.ok(dip >= 3 && dip <= 7, `回退=${dip}`);
-  assert.ok(Math.abs(m.pos(2.5 * m.T) - d) < 0.5);
+  let over = 0;
+  for (let t = m.T; t <= m.T + 0.5; t += 0.005) over = Math.max(over, m.pos(t) - d);
+  assert.ok(over >= 3.5 && over <= 4.5, `越冲=${over}`);
+  assert.ok(Math.abs(m.pos(m.T + 0.5) - d) < 0.01);
+  // 越冲期间速度回零
+  assert.ok(Math.abs(m.vel(m.T)) < 1e-9);
+  assert.ok(Math.abs(m.vel(m.T + 0.4)) < 1e-9);
 });
 
 test('距离为 0 不除零', () => {

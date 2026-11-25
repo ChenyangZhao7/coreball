@@ -13,6 +13,11 @@ def eq(a, b, msg):
 # CRC-16/CCITT-FALSE check vector
 eq(P.crc16(b"123456789"), 0x29B1, "CRC 校验向量")
 
+# 冻结标准的 WHO 请求完整帧（docs/04 §6）：A5 5A 10 01 00 + CRC 小端
+eq(P.encode(P.WHO).hex(), "a55a100100cebc", "WHO 请求帧字节流")
+f, rest, err = P.decode(bytes.fromhex("a55a100100cebc"))
+eq((err, f.type, f.payload), (None, P.WHO, b""), "WHO 请求解码")
+
 # 帧往返
 raw = P.encode(P.CMD, P.cmd_payload(0, 1000, 500, 1000))
 f, rest, err = P.decode(raw)

@@ -157,8 +157,11 @@ def route_intent(actions, msg, points, current_mm):
             return {"kind": "bad_target", "name": name}
         if BODY["active"] != "winch":
             p[2] = 0.0
-        p = list(clamp_ball(p))
-        return {"kind": "move", "point": p, "style": {}, "name": name}
+        q = list(clamp_ball(p))
+        r = {"kind": "move", "point": q, "style": {}, "name": name}
+        if max(abs(q[i] - p[i]) for i in range(3)) > 1.0:
+            r["requested"] = p      # 安全层改写前的原始目标，遥测里如实上报
+        return r
     if name == "expression":
         expr = msg.get("name")
         if expr not in EXPRESSIONS:
@@ -177,7 +180,10 @@ def route_intent(actions, msg, points, current_mm):
         r = {"kind": "move", "point": p}
     r["name"] = name
     if r["kind"] == "move":
-        r["point"] = list(clamp_ball(r["point"]))
+        q = list(clamp_ball(r["point"]))
+        if max(abs(q[i] - r["point"][i]) for i in range(3)) > 1.0:
+            r["requested"] = list(r["point"])   # 安全层改写前的原始目标
+        r["point"] = q
         r["style"] = (actions.get("styles") or {}).get(act.get("style", "normal"), {})
     return r
 
@@ -288,6 +294,7 @@ def apply_intent(msg):
         set_expression("acting")
         STATE["last"] = r["name"]
         STATE["goal"] = r["name"]
+        STATE["requested"] = r.get("requested")
     elif kind == "mount":
         if mount(r["body"]):
             STATE["last"] = "换到" + BODYMAP.BODIES[r["body"]]["name"]
@@ -295,12 +302,14 @@ def apply_intent(msg):
         MOVE["active"] = False
         _stop_jog()
         set_expression("idle")
+        STATE["requested"] = None
         STATE["last"] = r["reason"]
         print("REFUSE", r["reason"], flush=True)
     elif kind == "hold":
         MOVE["active"] = False
         _stop_jog()
         STATE["goal"] = None
+        STATE["requested"] = None
         set_expression("idle")
         STATE["last"] = "停"
     elif kind == "face":
@@ -337,7 +346,7 @@ def hud_lines(hub_mm, res, blocked=False, last=None, body="winch", pos_mm=None):
     if body != "winch":
         p = pos_mm or (0.0, 0.0, 0.0)
         lines = ["小机器人 (%.0f, %.0f) 地面" % (p[0], p[1]),
-                 "2 轴 · 有线 · 无线缆"]
+                 "2 轴 · 地面 · 无线缆"]
         if last:
             lines.append("指令：%s" % last)
         return lines
@@ -407,7 +416,7 @@ def panel_origin(region_h):
 # ---------------- 运行时 ----------------
 STATE = {"hub_mm": None, "res": None, "blocked": False, "last": None,
          "goal": None, "body": "winch", "pos_mm": None,
-         "ball_mm": None, "expr": "idle"}
+         "ball_mm": None, "expr": "idle", "requested": None}
 BODY = {"active": "winch"}
 INTENT_Q = queue.Queue(maxsize=64)
 MOVE = {"active": False}
@@ -437,6 +446,7 @@ def push_telemetry():
         blocked=STATE.get("blocked", False), last=STATE.get("last"),
         body=STATE.get("body", "winch"), expr=STATE.get("expr", "idle"),
         yaw=_ball_yaw(), goal=STATE.get("goal"), anchors=T.ALL_ANCHORS,
+        requested=STATE.get("requested"),
         t=time.time())
     if _TELE["sock"] is None:
         _TELE["sock"] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

@@ -87,7 +87,8 @@ set B=<path-to-blender.exe>
 & $B --background --python blender\build_anim.py      -- --out blender\out\anim
 
 # 计算（纯 Python，不需要 Blender）
-python tools\tension.py -380 520 1370
+python tools\tension.py -380 520 1300    # 球心；内部按吊点 +160 解算，输出 8 选 4
+python tools\export_params.py            # 改了张力参数后，同步到 web\params.json
 python tools\zone_map.py
 python tools\plan.py
 python tools\curves.py
@@ -168,9 +169,9 @@ python tools\sim_link.py
 
 ## 让它说话
 
-- 默认用 **Windows 离线语音**：0 成本、不用注册，`python voice.py "你好"` 就能听。
-- 换 **火山引擎**：`brain.json` → `voice.volcengine` 填 `appid` 和 `token`，`provider` 保持 `auto` 就会自动切过去。
+- 默认 **auto**：`brain.json`（或 `voice.json`）的 `voice.volcengine` 填了 `appid` 和 `token` 就走**火山引擎**，没填就走 **Windows 离线语音**——0 成本、不用注册，`python voice.py "你好"` 就能听。
 - 火山控制台：语音技术 → 语音合成 → 创建应用，拿 APPID 和 Access Token。
+- 强制只用本机：`provider`（或 voice.json 的 `backend`）改成 `windows`。
 
 ---
 
@@ -183,8 +184,8 @@ python tools\sim_link.py
 | 工位 | 1640 × 1100 × 1900 mm |
 | 线 | 8 根候选（机器选 4 根受力 + 4 根闲散）+ 1 根供电（双股） |
 | 当前线长 | 1331 / 645 / 766 / 661 mm |
-| 最松张力 | 1.86 N（余量够） |
-| 可飞区域 | 占工位 39–40% |
+| 最松张力 | 2.31 N（余量够） |
+| 可飞区域 | 采样空间 100%（吊点口径），实用区 100%，可用约 0.6 m³ |
 | 禁区 | 脖子为心 r210 硬，r305 软 |
 | 默认位置 | (−380, 520, 1300)，距眼 640 mm，偏正前 30° |
 

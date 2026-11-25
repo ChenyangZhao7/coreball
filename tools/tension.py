@@ -1,4 +1,4 @@
-﻿"""
+"""
 CoreBall - 张力分配计算器（纯 Python，不需要 Blender）
 
 用法：
@@ -131,8 +131,11 @@ def solve_subset(point, idx, anchors=None):
     }
 
 
+HUB_GAP     = 160.0     # 球心 → 吊点，运行时按吊点解算（docs/03）
+
+
 def solve(point):
-    """固定四角锚点（与旧版/网页基线一致）。"""
+    """固定四角锚点（旧基线，仅留作对比；运行时用 solve_selected）。"""
     return solve_subset(point, [0, 1, 2, 3], ANCHORS)
 
 
@@ -167,15 +170,21 @@ def solve_selected(point):
     return r
 
 
-def report(point):
-    r = solve(point)
+def report(ball):
+    """输入是**球心**（与 docs/03 默认位一致）；运行时按吊点（球心 +160）解算，
+    输出机器实际选的 4 根支撑（8 选 4），不是旧基线的固定四角。"""
+    hub = (ball[0], ball[1], ball[2] + HUB_GAP)
+    r = solve_selected(hub)
     print("=" * 62)
-    print("球位置 P = (%.0f, %.0f, %.0f)" % point)
+    print("球心 P = (%.0f, %.0f, %.0f)   吊点 H = (%.0f, %.0f, %.0f)"
+          % (ball + hub))
     print("需要线提供的合力 W = (%.2f, %.2f, %.2f) N" % r["W"])
+    print("支撑（8 选 4）：%s · 闲散 %d 根"
+          % (" ".join(r["support_names"]), r["idle_count"]))
     print("-" * 62)
     print("线长 / 张力：")
-    for i in range(4):
-        print("  %d  L=%6.0f mm   T=%6.2f N" % (i + 1, r["lengths"][i], r["T"][i]))
+    for name, L, Tv in zip(r["support_names"], r["lengths"], r["T"]):
+        print("  %s  L=%6.0f mm   T=%6.2f N" % (name, L, Tv))
     print("-" * 62)
     if not r["closed"]:
         print("  ! 最松的一根只有 %.2f N（目标 %.2f），余量不足" % (r["margin"], T_MIN))
@@ -185,9 +194,9 @@ def report(point):
     zsum = sum(r["T"][i] * r["u"][i][2] for i in range(4))
     print("  合力校验：Σ T·u_z = %.2f N（应为 %.2f）" % (zsum, r["W"][2]))
     loosest = min(range(4), key=lambda i: r["T"][i])
-    print("  最松：第 %d 根 %.2f N" % (loosest + 1, r["T"][loosest]))
+    print("  最松：%s %.2f N" % (r["support_names"][loosest], r["T"][loosest]))
     tightest = max(range(4), key=lambda i: r["T"][i])
-    print("  最紧：第 %d 根 %.2f N" % (tightest + 1, r["T"][tightest]))
+    print("  最紧：%s %.2f N" % (r["support_names"][tightest], r["T"][tightest]))
     if r["T"][tightest] > T_MAX:
         print("  ! 超过电机上限 %.0f N" % T_MAX)
     print("=" * 62)
@@ -198,5 +207,5 @@ if __name__ == "__main__":
         p = (float(sys.argv[1]), float(sys.argv[2]), float(sys.argv[3]))
         report(p)
     else:
-        for p in [(-380, 520, 1370), (380, 520, 1370), (0, 520, 1370), (-380, 700, 1450)]:
+        for p in [(-380, 520, 1300), (380, 520, 1300), (0, 520, 1300), (-380, 700, 1450)]:
             report(p)

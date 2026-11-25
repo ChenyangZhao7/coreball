@@ -85,7 +85,8 @@ set B=<path-to-blender.exe>
 & $B --background --python blender\build_anim.py      -- --out blender\out\anim
 
 # Computation (pure Python, no Blender)
-python tools\tension.py -380 520 1370
+python tools\tension.py -380 520 1300    # ball centre; solved at the hub (+160), 4 of 8 picked
+python tools\export_params.py            # after changing tension params, sync to web\params.json
 python tools\zone_map.py
 python tools\plan.py
 python tools\curves.py
@@ -168,9 +169,9 @@ Double-click `blender\指挥.bat`, then:
 
 ## Letting it speak
 
-- Default is **Windows offline speech**: zero cost, no signup. `python voice.py "hello"` and it talks.
-- To switch to **Volcengine**: fill `appid` and `token` under `voice.volcengine` in `brain.json`; keep `provider` as `auto` and it switches over.
+- Default is **auto**: with `appid` and `token` filled under `voice.volcengine` in `brain.json` (or `voice.json`) it uses **Volcengine**; otherwise it falls back to **Windows offline speech** — zero cost, no signup. `python voice.py "hello"` and it talks.
 - Volcengine console: Speech → Text-to-Speech → create an app, take the APPID and Access Token.
+- Force local only: set `provider` (or `backend` in voice.json) to `windows`.
 
 ---
 
@@ -183,8 +184,8 @@ Double-click `blender\指挥.bat`, then:
 | Station | 1640 × 1100 × 1900 mm |
 | Cables | 8 candidates (4 load-bearing + 4 idle) + 1 power (twinned) |
 | Current cable lengths | 1331 / 645 / 766 / 661 mm |
-| Slackest tension | 1.86 N (enough margin) |
-| Flyable zone | 39–40% of the station |
+| Slackest tension | 2.31 N (ample margin) |
+| Flyable zone | 100% of sampled workspace at the hub (practical zone 100%), ~0.6 m³ usable |
 | Keep-out zone | r210 hard / r305 soft, centred on the neck |
 | Default pose | (−380, 520, 1300), 640 mm from the eyes, 30° off centre |
 

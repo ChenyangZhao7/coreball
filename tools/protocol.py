@@ -1,7 +1,9 @@
 """CoreBall serial protocol v1.1 reference codec.
 
-Frame: A5 5A | VER | TYPE | LEN | PAYLOAD | CRC16-CCITT-FALSE (little-endian
-fields). CRC covers VER..PAYLOAD. See docs/04-接口标准.md.
+Frame: A5 5A | VER | TYPE | LEN | PAYLOAD | CRC16-CCITT-FALSE.
+CRC covers VER..PAYLOAD. All multi-byte fields — CRC included — are
+little-endian, per docs/04-接口标准.md §6.
+WHO 请求完整帧（空载荷）：A5 5A 10 01 00 CE BC。
 """
 import struct
 
@@ -35,7 +37,7 @@ def encode(ftype, payload=b"", ver=PROTO_VER):
     if len(payload) > 64:
         raise ValueError("payload > 64")
     body = bytes([ver, ftype, len(payload)]) + payload
-    return MAGIC + body + struct.pack(">H", crc16(body))
+    return MAGIC + body + struct.pack("<H", crc16(body))
 
 
 class Frame:
@@ -74,7 +76,7 @@ def decode(buf):
     if len(buf) < need:
         return None, buf, "short"
     body = buf[2:5 + ln]
-    got = struct.unpack(">H", buf[5 + ln:need])[0]
+    got = struct.unpack("<H", buf[5 + ln:need])[0]
     if crc16(body) != got:
         return None, buf[2:], "crc"
     return Frame(ver, ftype, body[3:]), buf[need:], None
