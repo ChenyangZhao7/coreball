@@ -37,11 +37,12 @@ docs/
   05-核心构造对比.md       几种内部骨架的取舍
   06-可达空间.md           8 个墙锚的覆盖测试与最佳布局
   07-开发日志.md           按时间的「做了什么 / 为什么 / 怎么验证」
+  08-技术报告.md           当前快照：目标、参数、覆盖、控制、风险、下一步
   archive/                已废弃的方向（最早的桌面盒、电磁板工位）
 web/
-  viewer.html             离线 WebGL 查看器（插头插拔动画）
+  viewer.html             离线 WebGL 查看器（插头插拔动画 + 3D 球/工位）
   command.html            3D 指挥页
-  control.html            2D/3D 控制面板
+  control.html            调试台（2D 地图 + 3D 球模块 + 3D 工位）
 blender/
   build_ball.py           核心球 φ80
   build_hub.py            吊点总成（偏航 + 伸缩），可单独出图

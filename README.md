@@ -36,11 +36,12 @@ docs/
   05-核心构造对比.md       prototype core options
   06-可达空间.md           coverage test for the eight wall anchors
   07-开发日志.md           dated log: what / why / how it was verified
+  08-技术报告.md           current snapshot: goals, parameters, coverage, control, risks, next
   archive/                abandoned directions (the first desk box, the electromagnetic station)
 web/
-  viewer.html             offline WebGL viewer (plug-in animation)
+  viewer.html             offline WebGL viewer (plug-in animation + 3D ball/rig)
   command.html            3D command page
-  control.html            2D/3D control panel
+  control.html            debug console (2D map + 3D ball module + 3D rig)
 blender/
   build_ball.py           the core ball, φ80
   build_hub.py            hub assembly (yaw + extension); renders on its own
