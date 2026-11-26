@@ -8,11 +8,14 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from . import commands
-from . import config as cfg
-from .history import History
-from .link import Link
-from .predictor import Predictor
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from station import commands
+from station import config as cfg
+from station.history import History
+from station.link import Link
+from station.predictor import Predictor
 
 STATION_WEB = Path(__file__).with_name("web")
 SHARED_WEB = Path(__file__).resolve().parents[1] / "web"
