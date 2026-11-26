@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+import threading
 import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -11,6 +12,7 @@ from . import commands
 from . import config as cfg
 from .history import History
 from .link import Link
+from .predictor import Predictor
 
 STATION_WEB = Path(__file__).with_name("web")
 SHARED_WEB = Path(__file__).resolve().parents[1] / "web"
@@ -201,6 +203,11 @@ def main(argv=None):
         print("station: %s" % e)
         return 2
     app = App(link=link)
+    stop = threading.Event()
+    if not args.no_prediction:
+        predictor = Predictor(app.submit_command, link.latest)
+        threading.Thread(target=predictor.run, args=(stop,), daemon=True).start()
+
     server = create_server(cfg.HOST, args.port, app)
     print("CoreBall station: http://%s:%d/" % (cfg.HOST, args.port))
     print("UDP 4590 发送 / 4591 接收；不要同时开 control_server.py")
@@ -209,6 +216,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     finally:
+        stop.set()
         server.server_close()
         link.stop()
     return 0
