@@ -87,6 +87,7 @@ class Controller:
 
         self.T_target = np.zeros(8)
         self.integral = np.zeros(8)
+        self.prev_measured = None
         self.steps = 0
         self.last_W = None
 
@@ -136,6 +137,7 @@ class Controller:
         ev = self.v_ref - v_ball
         W = (self.p["m"] * (self.a_ref + self.p["kp"] * e + self.p["kd"] * ev)
              + np.array([0.0, 0.0, self.p["m"] * P.G - self.p["tether_up"]]))
+        W = self._feasible_force(plant.r, W)
         self.last_W = W
 
         self._supervise(plant, t, W)
@@ -167,6 +169,36 @@ class Controller:
             if i not in self.active:
                 target[i] = self.p["idle_tension"]
         self.T_target = target
+
+    def _feasible_force(self, point, W):
+        """把期望力投影到当前支撑组能提供的范围内（保持重力分量）。
+
+        PD 在边界上会要求一个四根线给不出的水平力；不投影就会出现负张力、
+        线松掉。这里对「偏离重力」的部分做二分，找到最大可行比例。
+        """
+        W = np.asarray(W, dtype=float)
+        gravity = np.array(
+            [0.0, 0.0, self.p["m"] * P.G - self.p["tether_up"]])
+
+        def ok(vec):
+            try:
+                r = solve_force(tuple(point), tuple(vec), self.support, P.ANCHORS)
+            except ValueError:
+                return False
+            return (r["margin"] >= self.p["t_min"]
+                    and min(r["T"]) >= -1e-9
+                    and max(r["T"]) <= self.p["t_max"])
+
+        if ok(W):
+            return W
+        lo, hi = 0.0, 1.0
+        for _ in range(12):
+            mid = 0.5 * (lo + hi)
+            if ok(gravity + mid * (W - gravity)):
+                lo = mid
+            else:
+                hi = mid
+        return gravity + lo * (W - gravity)
 
     def _supervise(self, plant, t, W):
         if not self.enable_switching:
@@ -213,6 +245,10 @@ class Controller:
         currents = np.zeros(8)
         rd = self.p["drum_r"]
         kt = self.p["kt"]
+        if self.prev_measured is None:
+            rate = np.zeros(8)
+        else:
+            rate = (measured - self.prev_measured) / dt
 
         for i in range(8):
             if i in self.active:
@@ -225,13 +261,16 @@ class Controller:
                         + self.p["fric_c"] * np.tanh(plant.theta_dot[i] / 1e-4)) / kt
                 currents[i] = (feed
                                + self.p["servo_kp"] * error
-                               + self.p["servo_ki"] * self.integral[i])
+                               + self.p["servo_ki"] * self.integral[i]
+                               - self.p["servo_kd"] * rate[i]
+                               - self.p["servo_kv"] * plant.theta_dot[i])
             elif measured[i] > 0.15:
                 currents[i] = -self.p["idle_pay"]
             else:
                 currents[i] = (self.p["idle_tension"] * rd / kt
                                + self.p["servo_kp"] * (self.p["idle_tension"] - measured[i]))
 
+        self.prev_measured = measured.copy()
         return np.clip(currents, -self.p["i_max"], self.p["i_max"])
 
     def update(self, plant, t):

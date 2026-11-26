@@ -61,6 +61,8 @@ P = {
     # 张力环高增益会自激；0.005 A/N + 无积分在 10 mm 环上稳定。
     "servo_kp": 0.005,
     "servo_ki": 0.0,
+    "servo_kd": 0.003,
+    "servo_kv": 0.0,
     "idle_tension": 0.05,
     "idle_pay": 0.10,
     "tether_up": TETHER_UP,

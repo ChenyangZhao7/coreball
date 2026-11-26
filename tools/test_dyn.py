@@ -1,4 +1,4 @@
-"""动态仿真的回归测试；直接运行，打印 PASS。"""
+﻿"""动态仿真的回归测试；直接运行，打印 PASS。"""
 import os
 import sys
 
@@ -180,5 +180,64 @@ for i in range(int(4.0 / params["dt"])):
     plant.step(ctl.update(plant, i * params["dt"]), dt=params["dt"])
 if ctl.status()["switches"] < 1:
     raise SystemExit("FAIL: switching=True 时没有切换")
+
+
+import tempfile
+import dyn_scenarios as S  # noqa: E402
+
+# ---------- 指标函数 ----------
+t = np.arange(0.0, 5.0, 0.01)
+y = np.zeros((len(t), 3))
+y[:, 0] = 0.02
+y[t >= 2.0, 0] = 0.0
+close(S.settle_time(t, y, np.zeros(3), band=0.005, hold=0.5), 2.0, 0.02,
+      "settle 时间")
+y2 = y.copy()
+y2[:, 0] = 0.0
+y2[(t >= 1.0) & (t < 1.5), 0] = 0.02
+close(S.return_time(t, y2, np.zeros(3), t0=1.0, band=0.005, hold=0.5), 1.5,
+      0.02, "回位时间")
+close(S.peak_to_peak(np.array([[0, 0, 0], [0.01, 0, 0], [0.03, 0, 0]])),
+      0.03, 1e-12, "峰峰值")
+T = np.array([[1.0] * 4 + [0.1] * 4, [0.1] * 8, [1.0] * 8])
+close(S.slack_time(np.array([0.0, 0.5, 1.0]), T, [0, 1, 2, 3]), 0.5, 1e-12,
+      "松弛时间只算主动绳")
+
+# ---------- 悬停短跑确定性 ----------
+a = S.run_hover(duration=2.0, settle=0.5, record_hz=100.0)
+b = S.run_hover(duration=2.0, settle=0.5, record_hz=100.0)
+if a["metrics"] != b["metrics"]:
+    raise SystemExit("FAIL: 同一参数两次结果不同")
+
+# ---------- 收敛性：刚度 ×2、步长减半 ----------
+p2 = dict(P.P)
+p2["rope_ea"] *= 2.0
+p2["dt"] /= 2.0
+alt = S.run_hover(params=p2, duration=1.0, settle=0.0, record_hz=100.0)
+base = S.run_hover(duration=1.0, settle=0.0, record_hz=100.0)
+if np.linalg.norm(np.array(alt["final_ball"]) - np.array(base["final_ball"])) > 1e-3:
+    raise SystemExit("FAIL: 刚度/步长变化后结果不收敛")
+
+# ---------- 三点短跑 ----------
+three = S.run_three_points(dwell=1.5)
+if three["metrics"]["switches"] != 0:
+    raise SystemExit("FAIL: 三个验收点在固定支撑下不应切换")
+
+# ---------- 推一下：稳定性回归；2 s 验收值记在 thresholds 里 ----------
+push = S.run_push(push_at=2.0, duration=6.0)
+m = push["metrics"]
+if m["return_s"] is None:
+    raise SystemExit("FAIL: 推一下没有回位 %r" % m)
+if m["max_offset_mm"] > 80.0 or m["slack_s"] > 0.2:
+    raise SystemExit("FAIL: 推一下不稳定 %r" % m)
+if push["thresholds"]["return_s"] != 2.0:
+    raise SystemExit("FAIL: 推一下阈值丢了")
+
+# ---------- 输出文件 ----------
+with tempfile.TemporaryDirectory() as d:
+    S.write_outputs(a, d)
+    for name in ("hover.csv", "hover.png", "summary.json", "replay.json"):
+        if not os.path.exists(os.path.join(d, name)):
+            raise SystemExit("FAIL: 缺少输出 %s" % name)
 
 print("PASS")
