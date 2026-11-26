@@ -56,6 +56,10 @@ blender/
   out/                    所有渲染产物
 tools/
   tension.py              张力分配计算器（8 选 4）
+  dyn_params.py           动态仿真参数（SI，含置信度）
+  dyn_model.py            六自由度刚体 + 8 绳 + 8 卷筒
+  dyn_control.py          轨迹 / 外环 / 张力伺服
+  dyn_scenarios.py        悬停 / 三点 / 推一下 + 报告
   optimize_anchors.py     墙锚覆盖搜索
   control_server.py       控制页到 UDP 的桥
   zone_map.py             允许飞行区地图
