@@ -195,8 +195,8 @@ close(S.settle_time(t, y, np.zeros(3), band=0.005, hold=0.5), 2.0, 0.02,
 y2 = y.copy()
 y2[:, 0] = 0.0
 y2[(t >= 1.0) & (t < 1.5), 0] = 0.02
-close(S.return_time(t, y2, np.zeros(3), t0=1.0, band=0.005, hold=0.5), 1.5,
-      0.02, "回位时间")
+close(S.return_time(t, y2, np.zeros(3), t0=1.0, band=0.005, hold=0.5), 0.5,
+      0.02, "回位时间（相对 t0）")
 close(S.peak_to_peak(np.array([[0, 0, 0], [0.01, 0, 0], [0.03, 0, 0]])),
       0.03, 1e-12, "峰峰值")
 T = np.array([[1.0] * 4 + [0.1] * 4, [0.1] * 8, [1.0] * 8])
@@ -226,8 +226,8 @@ if three["metrics"]["switches"] != 0:
 # ---------- 推一下：稳定性回归；2 s 验收值记在 thresholds 里 ----------
 push = S.run_push(push_at=2.0, duration=6.0)
 m = push["metrics"]
-if m["return_s"] is None:
-    raise SystemExit("FAIL: 推一下没有回位 %r" % m)
+if m["return_s"] is None or m["return_s"] >= 2.0:
+    raise SystemExit("FAIL: 推一下没在 2 s 内回位 %r" % m)
 if m["max_offset_mm"] > 80.0 or m["slack_s"] > 0.2:
     raise SystemExit("FAIL: 推一下不稳定 %r" % m)
 if push["thresholds"]["return_s"] != 2.0:

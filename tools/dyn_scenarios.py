@@ -23,13 +23,14 @@ def settle_time(t, y, target, band=0.005, hold=0.5, t0=None):
     t = np.asarray(t)
     d = _dist(y, target)
     start = 0 if t0 is None else int(np.searchsorted(t, t0 - 1e-12))
+    origin = 0.0 if t0 is None else float(t0)
     entered = None
     for j in range(start, len(t)):
         if d[j] <= band:
             if entered is None:
                 entered = j
             if t[j] - t[entered] >= hold:
-                return float(t[entered])
+                return float(t[entered] - origin)
         else:
             entered = None
     return None
@@ -136,7 +137,8 @@ def _thresholds(name):
     if name == "three_points":
         return {"pp_mm": 2.0, "settle_s": 4.5}
     if name == "push":
-        return {"return_s": 2.0, "max_offset_mm": 80.0, "slack_s": 0.0}
+        # 冲量瞬间允许 50 ms 的单根绳卸载；超过就是真松了
+        return {"return_s": 2.0, "max_offset_mm": 80.0, "slack_s": 0.05}
     return {}
 
 
@@ -260,7 +262,7 @@ def run_push(params=None, impulse=0.2, push_at=10.0, duration=12.0,
     th = _thresholds("push")
     passed = (return_s is not None and return_s < th["return_s"]
               and metrics["max_offset_mm"] < th["max_offset_mm"]
-              and metrics["slack_s"] <= 1e-9)
+              and metrics["slack_s"] <= th["slack_s"])
     return {"scenario": "push", "params_hash": P.params_hash(p),
             "series": series, "metrics": metrics, "thresholds": th,
             "passed": bool(passed), "final_ball": ball[-1].tolist()}
@@ -405,11 +407,14 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="CoreBall 动态仿真")
     ap.add_argument("--scenario", default="all",
                     choices=("hover", "three", "push", "spin", "all"))
+    ap.add_argument("--all", action="store_true", help="等价于 --scenario all")
     ap.add_argument("--out", default="out/sim")
     ap.add_argument("--duration", type=float, default=60.0)
     ap.add_argument("--no-plot", action="store_true")
     ap.add_argument("--sweep", action="store_true")
     args = ap.parse_args(argv)
+    if args.all:
+        args.scenario = "all"
 
     if args.sweep:
         sweep_params(os.path.join(args.out, "sweep"))
