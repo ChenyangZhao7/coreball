@@ -1,9 +1,491 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><title>CoreBall 控制台</title></head>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoreBall 控制台</title>
+<style>
+  :root{
+    --bg:#0a0e12; --panel:#111820; --panel2:#0d1319; --line:#26313c;
+    --ink:#e6edf3; --muted:#8b949e; --accent:#ff2442; --ok:#3fb950;
+    --warn:#d29922; --bad:#f85149; --blue:#58a6ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}
+  header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    padding:10px 14px;border-bottom:1px solid var(--line)}
+  h1{font-size:15px;margin:0;letter-spacing:.04em}
+  h2{font-size:13px;margin:0 0 8px;color:var(--muted);font-weight:600}
+  .spacer{flex:1}
+  button{background:#1b242e;color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;padding:6px 10px;cursor:pointer;font:inherit}
+  button:hover:not(:disabled){border-color:#8b949e}
+  button.primary{background:var(--accent);border-color:var(--accent)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .badge{padding:2px 9px;border-radius:99px;background:#1b242e;
+    color:var(--muted);font-size:12px}
+  .badge.ok{background:#12351f;color:var(--ok)}
+  .badge.bad{background:#3d1519;color:var(--bad)}
+  .badge.warn{background:#3a2d12;color:var(--warn)}
+  #readonly{display:none;margin:10px 14px 0;padding:8px 12px;
+    border:1px solid #5a3a12;background:#2a1f10;color:var(--warn);
+    border-radius:8px;font-size:13px}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 360px;
+    gap:12px;padding:12px 14px 20px;height:calc(100vh - 58px);overflow:hidden}
+  .left{display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0}
+  .views{display:grid;grid-template-columns:1.1fr .9fr;gap:12px;
+    min-height:0;flex:1}
+  .card{background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:10px}
+  .card.fill{display:flex;flex-direction:column;min-height:0}
+  #map{width:100%;height:100%;min-height:300px;display:block;
+    border-radius:6px;background:var(--panel2)}
+  #rig{width:100%;height:100%;min-height:300px;border:0;border-radius:6px;
+    background:#0d1117}
+  aside{border-left:1px solid var(--line);padding-left:12px;
+    overflow:auto;display:flex;flex-direction:column;gap:10px}
+  .kv{display:flex;justify-content:space-between;gap:10px;
+    padding:2px 0;font-size:13px}
+  .kv span{color:var(--muted)}
+  .kv b{font-weight:500;text-align:right;word-break:break-all}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .row.tight{gap:6px}
+  input[type=number],input[type=text]{background:#0d1319;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:5px 7px;
+    font:inherit;width:78px}
+  input[type=range]{width:100%}
+  label.small{font-size:12px;color:var(--muted)}
+  #ropeRows{display:grid;gap:3px}
+  .rope{display:grid;grid-template-columns:52px 1fr 54px;gap:6px;
+    align-items:center;font-size:12px}
+  .bar{height:7px;background:#1b242e;border-radius:4px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--ok)}
+  #suggest{display:none}
+  #suggest.show{display:block}
+  #suggest .reason{font-size:13px;margin:4px 0}
+  #history{display:grid;gap:3px;font-size:12px;max-height:220px;overflow:auto}
+  .hist{display:grid;grid-template-columns:44px 58px 1fr;gap:6px;
+    padding:2px 0;border-bottom:1px solid #1b242e}
+  .hist .s{color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+    max-width:80vw;padding:8px 14px;border-radius:8px;background:#111827;
+    color:#fff;font-size:13px;opacity:0;pointer-events:none;
+    transition:opacity .2s;z-index:10}
+  #toast.show{opacity:1}
+  @media(max-width:1000px){
+    main{grid-template-columns:1fr;height:auto;overflow:visible}
+    aside{border-left:0;border-top:1px solid var(--line);padding-left:0;
+      padding-top:12px}
+    .views{grid-template-columns:1fr;min-height:unset}
+    #map,#rig{min-height:360px;height:360px}
+  }
+</style>
+</head>
 <body>
-<h1>CoreBall 控制台</h1>
-<p>页面在 Task 5 完成；现在只验证 API 和静态服务。</p>
-<pre id="state">/api/state</pre>
+<header>
+  <h1>CoreBall 控制台</h1>
+  <span id="conn" class="badge">连接中</span>
+  <button id="modeBtn">手动</button>
+  <span id="source" class="badge">—</span>
+  <span class="spacer"></span>
+  <button id="takeover">接管</button>
+  <button id="stop" class="primary">停止</button>
+</header>
+<div id="readonly">当前不是 winch（吊索）身体；station v1 只读。请先在 Blender 里换回吊索。</div>
+
+<main>
+  <section class="left">
+    <div class="views">
+      <div class="card fill">
+        <h2>2D 地图 · 点击设 x/y</h2>
+        <canvas id="map"></canvas>
+      </div>
+      <div class="card fill">
+        <h2>3D 工位 · 实时</h2>
+        <iframe id="rig" src="/shared/viewer.html?embed=1&amp;debug=rig" title="3D 工位"></iframe>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>目标</h2>
+      <div class="row">
+        <label class="small">x <input id="ix" type="number" step="10" value="-380"></label>
+        <label class="small">y <input id="iy" type="number" step="10" value="520"></label>
+        <label class="small">z <input id="iz" type="number" step="10" min="900" max="1500" value="1300"></label>
+        <button id="send" class="primary">发送</button>
+        <span class="hint" id="sendHint"></span>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <span class="small" id="zv">z 1300</span>
+        <input id="zr" type="range" min="900" max="1500" step="5" value="1300">
+      </div>
+      <div class="row tight" style="margin-top:8px">
+        <button data-preset="come">过来</button>
+        <button data-preset="back">回去</button>
+        <button data-preset="look">看我</button>
+        <button data-preset="up">升 120</button>
+        <button data-preset="down">降 120</button>
+        <button data-preset="left">左 120</button>
+        <button data-preset="right">右 120</button>
+      </div>
+      <div class="row tight" style="margin-top:6px">
+        <span class="small">表情</span>
+        <button data-expr="idle">待命</button>
+        <button data-expr="listening">在听</button>
+        <button data-expr="acting">执行</button>
+      </div>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>状态</h2>
+      <div class="kv"><span>球</span><b id="sBall">—</b></div>
+      <div class="kv"><span>吊点</span><b id="sHub">—</b></div>
+      <div class="kv"><span>目标</span><b id="sTarget">—</b></div>
+      <div class="kv"><span>安全修正</span><b id="sReq">—</b></div>
+      <div class="kv"><span>遥测</span><b id="sAge">—</b></div>
+      <div class="kv"><span>最后指令</span><b id="sLast">—</b></div>
+      <div class="kv"><span>安全层</span><b id="sBlocked">—</b></div>
+    </div>
+
+    <div class="card">
+      <h2>绳索</h2>
+      <div class="kv"><span>支撑</span><b id="sSupport">—</b></div>
+      <div id="ropeRows"></div>
+      <div class="kv"><span>最松</span><b id="sMargin">—</b></div>
+      <div class="kv"><span>力封闭</span><b id="sClosed">—</b></div>
+    </div>
+
+    <div id="suggest" class="card">
+      <h2>预测建议</h2>
+      <div class="reason" id="sugReason"></div>
+      <div class="hint" id="sugMeta"></div>
+      <div class="row tight" style="margin-top:6px">
+        <button id="sugAccept" class="primary">接受</button>
+        <button id="sugReject">忽略</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <label class="small"><input id="autoPred" type="checkbox"> 允许预测自动执行</label>
+      </div>
+      <div class="hint">默认只建议；置信度 ≥0.7 且 2 s 内没有其他命令时才自动。</div>
+    </div>
+
+    <div class="card">
+      <h2>历史</h2>
+      <div id="history"></div>
+    </div>
+  </aside>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const FALLBACK_ANCHORS = [
+  [-760,12,1849],[780,1100,1760],[-300,12,1849],[-780,1100,1760],
+  [760,12,1670],[-808,200,1849],[808,500,1760],[808,800,1760]
+];
+let anchors = FALLBACK_ANCHORS;
+let state = {mode:"manual", suggestions:[], link:{}, telemetry:null, prediction_auto:false};
+let target = {x:-380, y:520, z:1300};
+let toastTimer = null;
+
+function toast(text){
+  $("toast").textContent = text;
+  $("toast").classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>$("toast").classList.remove("show"), 4000);
+}
+
+async function api(path, payload){
+  const r = await fetch(path, {method:"POST", cache:"no-store",
+    headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload||{})});
+  let body = null;
+  try { body = await r.json(); } catch (_) {}
+  if(!r.ok) throw new Error((body && body.error) || ("HTTP " + r.status));
+  return body;
+}
+
+async function fetchParams(){
+  try {
+    const r = await fetch("/shared/params.json", {cache:"no-store"});
+    const p = await r.json();
+    if(Array.isArray(p.anchors) && p.anchors.length === 8) anchors = p.anchors;
+  } catch (_) {}
+}
+
+function fmt(v, digits=1){
+  if(v === null || v === undefined) return "—";
+  return Number(v).toFixed(digits);
+}
+function point(p){ return p ? "(" + fmt(p[0],0) + ", " + fmt(p[1],0) + ", " + fmt(p[2],0) + ")" : "—"; }
+
+function postTelemetry(){
+  const iframe = $("rig");
+  if(iframe.contentWindow && state.telemetry){
+    iframe.contentWindow.postMessage({type:"telemetry", data:state.telemetry}, "*");
+  }
+}
+
+function render(){
+  const t = state.telemetry;
+  const connected = !!state.link.connected;
+  $("conn").textContent = connected ? "在线" : "遥测离线";
+  $("conn").className = "badge " + (connected ? "ok" : "bad");
+  $("modeBtn").textContent = state.mode === "auto" ? "自动" : "手动";
+  $("source").textContent = "来源：" + (state.current_source || "—");
+  $("autoPred").checked = !!state.prediction_auto;
+
+  const isWinch = !t || !t.body || t.body === "winch";
+  $("readonly").style.display = isWinch ? "none" : "block";
+  const disabled = !isWinch || !connected;
+  $("send").disabled = disabled;
+  $("sendHint").textContent = !isWinch ? "rover 只读" : (connected ? "" : "遥测离线，运动禁用");
+  document.querySelectorAll("[data-preset],[data-expr]").forEach(b=>b.disabled = disabled);
+  $("zr").disabled = disabled; $("iz").disabled = disabled;
+  $("ix").disabled = disabled; $("iy").disabled = disabled;
+
+  $("sBall").textContent = t ? point(t.ball) : "—";
+  $("sHub").textContent = t ? point(t.hub) : "—";
+  $("sTarget").textContent = point([target.x, target.y, target.z]);
+  $("sReq").textContent = (t && t.requested) ? point(t.requested.point || t.requested) : "—";
+  $("sAge").textContent = state.link.age_ms === null || state.link.age_ms === undefined
+    ? "—" : state.link.age_ms + " ms";
+  $("sLast").textContent = t ? (t.last || "—") : "—";
+  $("sBlocked").textContent = t && t.blocked ? "已否决" : (t ? "通过" : "—");
+
+  const support = (t && t.support) || [];
+  const tensions = (t && t.tensions) || [];
+  $("sSupport").textContent = support.length
+    ? support.map(i=>"A" + (i+1)).join(" ") : "—";
+  const rows = $("ropeRows");
+  rows.replaceChildren();
+  support.forEach((idx, k)=>{
+    const ten = tensions[k];
+    const row = document.createElement("div");
+    row.className = "rope";
+    const name = document.createElement("span"); name.textContent = "A" + (idx+1);
+    const bar = document.createElement("div"); bar.className = "bar";
+    const fill = document.createElement("i");
+    fill.style.width = Math.min(100, Math.max(0, (Number(ten)||0)/5*100)) + "%";
+    fill.style.background = (ten >= 1) ? "var(--ok)" : (ten >= 0.3 ? "var(--warn)" : "var(--bad)");
+    bar.append(fill);
+    const val = document.createElement("span"); val.textContent = fmt(ten,2) + " N";
+    row.append(name, bar, val);
+    rows.append(row);
+  });
+  $("sMargin").textContent = t && t.margin != null ? fmt(t.margin,2) + " N" : "—";
+  $("sClosed").textContent = t && t.margin != null ? (t.margin >= 0.3 ? "是" : "否") : "—";
+
+  const sug = (state.suggestions || [])[0];
+  const sugEl = $("suggest");
+  sugEl.classList.toggle("show", !!sug);
+  if(sug){
+    $("sugReason").textContent = sug.reason || "预测建议";
+    const p = sug.payload && sug.payload.point;
+    $("sugMeta").textContent = "目标 " + point(p) + " · 置信度 " + fmt(sug.confidence,2);
+  }
+
+  drawMap();
+}
+
+function drawMap(){
+  const cv = $("map");
+  const rect = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, Math.round(rect.width * dpr));
+  cv.height = Math.max(1, Math.round(rect.height * dpr));
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const W = rect.width, H = rect.height;
+  ctx.clearRect(0,0,W,H);
+  const pad = 26;
+  const xmin=-900, xmax=900, ymin=0, ymax=1200;
+  const sx = x => pad + (x-xmin)/(xmax-xmin)*(W-2*pad);
+  const sy = y => H-pad - (y-ymin)/(ymax-ymin)*(H-2*pad);
+
+  ctx.strokeStyle = "#30363d"; ctx.lineWidth = 1;
+  ctx.strokeRect(sx(-820), sy(1100), sx(820)-sx(-820), sy(0)-sy(1100));
+  ctx.strokeStyle = "#26313c";
+  ctx.beginPath(); ctx.moveTo(sx(-820), sy(0)); ctx.lineTo(sx(820), sy(0)); ctx.stroke();
+  ctx.fillStyle = "#8b949e"; ctx.font = "11px sans-serif";
+  ctx.fillText("后墙 y=0", sx(-820)+4, sy(0)-5);
+  ctx.fillText("前开口 y=1100", sx(-820)+4, sy(1100)+14);
+
+  // neck keep-out
+  const ncx=sx(0), ncy=sy(890);
+  const rx=(sx(305)-sx(0)), ry=(sy(890)-sy(1195));
+  ctx.strokeStyle = "#5a3a2a";
+  ctx.beginPath(); ctx.ellipse(ncx,ncy,Math.abs(rx),Math.abs(ry),0,0,Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = "#6b2d2d";
+  ctx.beginPath(); ctx.ellipse(ncx,ncy,Math.abs(sx(210)-sx(0)),Math.abs(sy(890)-sy(1100)),0,0,Math.PI*2); ctx.stroke();
+
+  anchors.forEach((a,i)=>{
+    ctx.fillStyle = "#484f58";
+    ctx.beginPath(); ctx.arc(sx(a[0]), sy(a[1]), 4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#6e7681";
+    ctx.fillText("A"+(i+1), sx(a[0])+5, sy(a[1])-5);
+  });
+
+  const t = state.telemetry;
+  if(t && t.hub){
+    const sup = t.support || [];
+    sup.forEach((idx,k)=>{
+      const a = anchors[idx]; if(!a) return;
+      ctx.strokeStyle = "rgba(63,185,80,.55)"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(sx(a[0]),sy(a[1]));
+      ctx.lineTo(sx(t.hub[0]),sy(t.hub[1])); ctx.stroke();
+    });
+    ctx.fillStyle = "#d29922";
+    ctx.beginPath(); ctx.arc(sx(t.hub[0]),sy(t.hub[1]),4,0,Math.PI*2); ctx.fill();
+  }
+  if(t && t.ball){
+    ctx.fillStyle = "#58a6ff";
+    ctx.beginPath(); ctx.arc(sx(t.ball[0]),sy(t.ball[1]),6,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "rgba(88,166,255,.45)"; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(sx(t.ball[0]),sy(t.ball[1]));
+    ctx.lineTo(sx(target.x),sy(target.y)); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.fillStyle = "#ff2442";
+  ctx.beginPath(); ctx.arc(sx(target.x), sy(target.y), 6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#ff7a8a"; ctx.fillText("目标", sx(target.x)+7, sy(target.y)-7);
+}
+
+function syncTargetInputs(){
+  $("ix").value = String(Math.round(target.x));
+  $("iy").value = String(Math.round(target.y));
+  $("iz").value = String(Math.round(target.z));
+  $("zr").value = String(target.z);
+  $("zv").textContent = "z " + Math.round(target.z);
+}
+
+async function sendTarget(){
+  const x = Number($("ix").value), y = Number($("iy").value), z = Number($("iz").value);
+  if(!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)){
+    toast("目标必须是数字"); return;
+  }
+  target = {x, y, z: Math.min(1500, Math.max(900, z))};
+  syncTargetInputs();
+  try{
+    const r = await api("/api/command", {source:"manual", kind:"goto",
+      payload:{point:[target.x, target.y, target.z]}, reason:"手动目标"});
+    toast("已接受" + (r && r.status === "accepted" ? "" : "：" + r.status));
+    refresh();
+  }catch(e){ toast(e.message); }
+}
+
+async function refresh(){
+  try{
+    const r = await fetch("/api/state", {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    state = await r.json();
+    postTelemetry();
+    render();
+  }catch(e){
+    state.link = {connected:false, age_ms:null};
+    render();
+  }
+}
+
+async function fetchHistory(){
+  try{
+    const r = await fetch("/api/history?limit=20", {cache:"no-store"});
+    const body = await r.json();
+    const box = $("history"); box.replaceChildren();
+    (body.items || []).slice().reverse().forEach(it=>{
+      const row = document.createElement("div"); row.className = "hist";
+      const tm = document.createElement("span"); tm.className="s";
+      tm.textContent = new Date((it.t||0)*1000).toLocaleTimeString("zh-CN",{hour:"2-digit",minute:"2-digit"});
+      const src = document.createElement("span"); src.className="s"; src.textContent = it.source || "—";
+      const msg = document.createElement("span");
+      msg.textContent = (it.status || "") + " · " + (it.kind || "") + (it.reason ? " · " + it.reason : "");
+      row.append(tm, src, msg); box.append(row);
+    });
+  }catch(_){}
+}
+
+async function stopAll(){
+  try{
+    await api("/api/command", {source:"manual", kind:"stop", payload:{}, reason:"接管/停止"});
+    toast("已停止，手动模式");
+    refresh();
+  }catch(e){ toast(e.message); }
+}
+
+// events
+$("send").addEventListener("click", sendTarget);
+$("zr").addEventListener("input", e=>{
+  target.z = Number(e.target.value);
+  $("iz").value = String(Math.round(target.z));
+  $("zv").textContent = "z " + Math.round(target.z);
+  render();
+});
+$("iz").addEventListener("change", e=>{
+  target.z = Math.min(1500, Math.max(900, Number(e.target.value) || 1300));
+  syncTargetInputs(); render();
+});
+["ix","iy"].forEach(id=>$(id).addEventListener("change", e=>{
+  target[id === "ix" ? "x" : "y"] = Number(e.target.value) || 0;
+  render();
+}));
+$("map").addEventListener("click", e=>{
+  const rect = e.target.getBoundingClientRect();
+  const pad=26, xmin=-900, xmax=900, ymin=0, ymax=1200;
+  const x = xmin + (e.clientX-rect.left-pad)/(rect.width-2*pad)*(xmax-xmin);
+  const y = ymin + (rect.height-pad-(e.clientY-rect.top))/(rect.height-2*pad)*(ymax-ymin);
+  target.x = Math.round(x); target.y = Math.round(y);
+  syncTargetInputs(); render();
+});
+document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click", async ()=>{
+  try{
+    await api("/api/command", {source:"manual", kind:"preset",
+      payload:{name:b.dataset.preset}, reason:"预设"});
+    toast("预设：" + b.textContent); refresh();
+  }catch(e){ toast(e.message); }
+}));
+document.querySelectorAll("[data-expr]").forEach(b=>b.addEventListener("click", async ()=>{
+  try{
+    await api("/api/command", {source:"manual", kind:"expression",
+      payload:{name:b.dataset.expr}, reason:"表情"});
+    toast("表情：" + b.textContent); refresh();
+  }catch(e){ toast(e.message); }
+}));
+$("modeBtn").addEventListener("click", async ()=>{
+  const mode = state.mode === "auto" ? "manual" : "auto";
+  try{ await api("/api/mode", {mode}); toast(mode === "auto" ? "已切自动" : "已切手动"); refresh(); }
+  catch(e){ toast(e.message); }
+});
+$("takeover").addEventListener("click", stopAll);
+$("stop").addEventListener("click", stopAll);
+$("sugAccept").addEventListener("click", async ()=>{
+  const sug = (state.suggestions || [])[0]; if(!sug) return;
+  try{ await api("/api/suggestion/accept", {id:sug.id}); toast("已接受建议"); refresh(); }
+  catch(e){ toast(e.message); }
+});
+$("sugReject").addEventListener("click", async ()=>{
+  const sug = (state.suggestions || [])[0]; if(!sug) return;
+  try{ await api("/api/suggestion/reject", {id:sug.id}); refresh(); }
+  catch(e){ toast(e.message); }
+});
+$("autoPred").addEventListener("change", async e=>{
+  try{ await api("/api/settings", {prediction_auto:e.target.checked}); refresh(); }
+  catch(err){ toast(err.message); }
+});
+
+// boot
+fetchParams().then(()=>{ syncTargetInputs(); drawMap(); });
+syncTargetInputs();
+refresh();
+fetchHistory();
+setInterval(refresh, 100);
+setInterval(fetchHistory, 2000);
+window.addEventListener("resize", drawMap);
+$("rig").addEventListener("load", postTelemetry);
+</script>
 </body>
 </html>

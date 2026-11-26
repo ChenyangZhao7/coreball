@@ -102,3 +102,5 @@ class AppTest(unittest.TestCase):
         with urllib.request.urlopen(self.base + "/", timeout=3) as r:
             html = r.read().decode("utf-8")
         self.assertIn("/api/state", html)
+        self.assertIn("接管", html)
+        self.assertIn("预测", html)
