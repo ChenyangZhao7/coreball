@@ -62,6 +62,12 @@ tools/
   plan.py                 路径规划
   curves.py               速度曲线对比
   storyboard.py           「它的一天」分镜
+station/
+  app.py                  独立控制台入口（8030）
+  commands.py             命令 / 来源 / 优先级 / 仲裁
+  link.py                 UDP 4590 发送 / 4591 接收
+  predictor.py            模拟预测源
+  web/index.html          控制台页面
 ```
 
 ---
@@ -158,6 +164,21 @@ python tools\sim_link.py
 - 也可以直接说「换到车上 / 换回吊索」
 - 换身时**未完成的目标会交给新身体**；新身体做不到的（例如小车升降）会明确拒绝，而不是假装动了
 - 小车只在地面动（x/y + 朝向），HUD 会切成「小机器人 · 地面 · 无线缆」
+
+## 独立控制台 `station/`
+
+不想用调试台时，起一个独立控制程序：
+
+```powershell
+blender\指挥.bat
+python station\app.py
+# http://127.0.0.1:8030/
+```
+
+- 2D 地图点选 + x/y/z + 高度，把球送到任意点；右侧有 3D 工位、张力、建议、历史
+- 手动默认；语音/行为/预测都往 `/api/command` 投命令，手动随时接管
+- **station 独占 4591**；跑它时不要同时开 `tools\control_server.py`
+- 细节见 `station/README.md`
 
 ## 大脑（打字 → 球会动）
 
