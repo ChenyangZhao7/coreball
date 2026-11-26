@@ -43,7 +43,8 @@ P = {
     "rot_damp": 0.002,
     "current_tau": 5.0e-4,
     "attachment": "ring",
-    "ring_r": 0.030,
+    # 30 mm 会在 5 Hz 张力极限环（见 docs/09）；10 mm 是仿真验证过的上限。
+    "ring_r": 0.010,
     "ring_z": -0.001,
     "ear_angles": (26.6, 124.6, 233.2, 279.0),
     "dt": 2.0e-4,
@@ -53,8 +54,9 @@ P = {
     "cooldown_s": 0.3,
     "kp": 64.0,
     "kd": 16.0,
-    "servo_kp": 0.2,
-    "servo_ki": 2.0,
+    # 张力环高增益会自激；0.005 A/N + 无积分在 10 mm 环上稳定。
+    "servo_kp": 0.005,
+    "servo_ki": 0.0,
     "idle_tension": 0.05,
     "idle_pay": 0.10,
     "tether_up": TETHER_UP,

@@ -95,4 +95,47 @@ plant.step(cmd, dt=P.P["dt"])
 if not plant.tensions()[i] > t0:
     raise SystemExit("FAIL: 收绳应让张力上升")
 
+import dyn_control as C  # noqa: E402
+
+# ---------- 轨迹端点 ----------
+s, sd, sa = C.min_jerk(0.0, 1.0)
+close(s, 0.0, 1e-12, "min_jerk 起点")
+s, sd, sa = C.min_jerk(1.0, 1.0)
+close(s, 1.0, 1e-12, "min_jerk 终点")
+close(sd, 0.0, 1e-12, "min_jerk 终点速度")
+close(sa, 0.0, 1e-9, "min_jerk 终点加速度")
+
+d = C.move_duration(0.1, P.P["v_line_max"], 1.0)
+if d < 1.875 * 0.1 / P.P["v_line_max"] - 1e-9:
+    raise SystemExit("FAIL: 移动时长没尊重峰值速度")
+
+# ---------- 悬停 10 秒 ----------
+plant = M.Plant()
+ctl = C.Controller()
+ball0 = np.array(P.P0)
+for i in range(int(10.0 / P.P["dt"])):
+    plant.step(ctl.update(plant, i * P.P["dt"]), dt=P.P["dt"])
+drift = np.linalg.norm(plant.ball_center() - ball0)
+if drift > 0.002:
+    raise SystemExit("FAIL: 悬停漂移 %.3f mm" % (drift * 1000))
+active = plant.tensions()[list(ctl.status()["support"])]
+if np.min(active) < P.P["t_min"] - 1e-9 or np.max(active) > P.P["t_max"] + 1e-9:
+    raise SystemExit("FAIL: 悬停张力越界 %r" % active)
+
+# ---------- 100 mm 定点 ----------
+plant = M.Plant()
+ctl = C.Controller()
+target = (P.P0[0] + 0.100, P.P0[1], P.P0[2])
+ctl.start_move(target)
+settled_at = None
+for i in range(int(6.0 / P.P["dt"])):
+    plant.step(ctl.update(plant, i * P.P["dt"]), dt=P.P["dt"])
+    if np.linalg.norm(plant.ball_center() - np.array(target)) < 0.005:
+        if settled_at is None:
+            settled_at = i * P.P["dt"]
+    else:
+        settled_at = None
+if settled_at is None or settled_at > 4.5:
+    raise SystemExit("FAIL: 100 mm 定点 settle=%r" % settled_at)
+
 print("PASS")
