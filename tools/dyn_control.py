@@ -23,6 +23,8 @@ def min_jerk(t, T):
 def move_duration(distance, vmax, amax):
     if distance < 1e-9:
         return 0.0
+    vmax = max(float(vmax), 1e-9)
+    amax = max(float(amax), 1e-9)
     return max(1.875 * distance / vmax,
                math.sqrt(5.7735 * distance / amax), 0.5)
 
@@ -84,6 +86,7 @@ class Controller:
         self.last_supervisor = -1e9
         self.cooldown_until = -1e9
         self.abort = False
+        self.low_time = 0.0
 
         self.T_target = np.zeros(8)
         self.integral = np.zeros(8)
@@ -138,9 +141,7 @@ class Controller:
         W = (self.p["m"] * (self.a_ref + self.p["kp"] * e + self.p["kd"] * ev)
              + np.array([0.0, 0.0, self.p["m"] * P.G - self.p["tether_up"]]))
         W = self._feasible_force(plant.r, W)
-        self.last_W = W
-
-        self._supervise(plant, t, W)
+        self._supervise(plant, t)
 
         if self.switching:
             lam = smoothstep((t - self.switch_t0) / self.p["switch_s"])
@@ -168,7 +169,7 @@ class Controller:
         for i in range(8):
             if i not in self.active:
                 target[i] = self.p["idle_tension"]
-        self.T_target = target
+        self.T_target = np.minimum(target, self.p["t_max"])
 
     def _feasible_force(self, point, W):
         """把期望力投影到当前支撑组能提供的范围内（保持重力分量）。
@@ -200,7 +201,7 @@ class Controller:
                 hi = mid
         return gravity + lo * (W - gravity)
 
-    def _supervise(self, plant, t, W):
+    def _supervise(self, plant, t):
         if not self.enable_switching:
             return
         if self.switching or t < self.cooldown_until:
@@ -220,10 +221,8 @@ class Controller:
         try:
             current = solve_force(tuple(hub_ref), tuple(W_static),
                                   self.support, P.ANCHORS)
-            current_score = current["margin"] - 0.005 * sum(current["T"])
             current_margin = current["margin"]
         except ValueError:
-            current_score = -1e9
             current_margin = -1e9
 
         if tuple(best["idx"]) == tuple(self.support):
@@ -250,9 +249,22 @@ class Controller:
         else:
             rate = (measured - self.prev_measured) / dt
 
+        if not self.abort:
+            active = list(self.active)
+            if active and float(np.min(measured[active])) < self.p["t_min"]:
+                self.low_time += dt
+                if self.low_time >= 0.05:
+                    self.abort = True
+            else:
+                self.low_time = 0.0
+
         for i in range(8):
             if i in self.active:
-                desired = self.T_target[i]
+                if self.abort:
+                    desired = measured[i]
+                    self.integral[i] = 0.0
+                else:
+                    desired = self.T_target[i]
                 error = desired - measured[i]
                 self.integral[i] = np.clip(
                     self.integral[i] + error * dt, -5.0, 5.0)
@@ -282,9 +294,12 @@ class Controller:
 
     def status(self):
         return {
+            "target": self.target.copy(),
             "p_ref": self.p_ref.copy(),
             "v_ref": self.v_ref.copy(),
             "support": list(self.support),
+            "previous_support": (list(self.old_support)
+                                 if self.old_support is not None else None),
             "active": sorted(self.active),
             "switching": self.switching,
             "switches": self.switches,

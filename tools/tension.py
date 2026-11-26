@@ -82,6 +82,8 @@ def solve_subset(point, idx, anchors=None, W=None):
     P = tuple(point)
     if W is None:
         W = (0.0, 0.0, BALL_MASS * G - TETHER_UP)
+    else:
+        W = tuple(float(x) for x in W)
 
     u = []
     lengths = []

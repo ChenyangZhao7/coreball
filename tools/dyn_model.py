@@ -67,7 +67,7 @@ class Plant:
             return np.tile(self.r, (8, 1))
 
         Rb = quat_to_R(self.q)
-        r_ring = float(self.p["ring_r"])
+        r_ring = float(self.p["ear_r"] if mode == "ears4" else self.p["ring_r"])
         z_ring = float(self.p["ring_z"])
         ears = np.deg2rad(np.array(self.p["ear_angles"], dtype=float))
         out = np.empty((8, 3))

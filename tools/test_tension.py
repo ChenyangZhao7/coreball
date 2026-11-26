@@ -69,6 +69,11 @@ for k in range(3):
     s = sum(r["T"][i] * r["u"][i][k] for i in range(4))
     eq(s, W[k], "任意力平衡 %s" % "xyz"[k], 1e-9)
 
+# ---------- W 归一化成 tuple ----------
+r = T.solve_force(HUB, [0.1, 0.0, 4.3], [1, 2, 3, 5], T.ALL_ANCHORS)
+if r["W"] != (0.1, 0.0, 4.3):
+    raise SystemExit("FAIL: solve_force 没把 W 存成 tuple: %r" % (r["W"],))
+
 # ---------- 8 选 4 也接受任意力 ----------
 r = T.solve_selected(HUB, (0.8, 0.0, 4.305))
 for k in range(3):

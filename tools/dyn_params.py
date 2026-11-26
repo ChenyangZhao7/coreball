@@ -45,13 +45,14 @@ P = {
     "attachment": "ring",
     # 30 mm 会在 5 Hz 张力极限环（见 docs/09）；10 mm 是仿真验证过的上限。
     "ring_r": 0.010,
+    "ear_r": 0.030,
     "ring_z": -0.001,
     "ear_angles": (26.6, 124.6, 233.2, 279.0),
     "dt": 2.0e-4,
     "control_every": 5,
     "supervisor_hz": 30.0,
     # 运动中切换支撑会产生 200–300 mm 瞬态；三个验收点在固定支撑下都闭合，
-    # 所以 v1 默认不切；需要实验时把 switching 设 True。
+    # 所以 v1 默认不切。switching=True 只做实验，不要用于验收。
     "switching": False,
     "switch_s": 0.3,
     "cooldown_s": 0.3,

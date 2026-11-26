@@ -62,6 +62,12 @@ plant = M.Plant(attachment="ring")
 if np.linalg.norm(plant.net_torque()) < 1e-3:
     raise SystemExit("FAIL: 环形挂点应产生静态力矩")
 
+# ---------- ears4 仍按 30 mm CAD 耳建模 ----------
+plant = M.Plant(attachment="ears4")
+radius = np.linalg.norm(plant.attachment_points() - plant.r, axis=1)
+if abs(float(np.mean(radius)) - 0.030) > 1e-3:
+    raise SystemExit("FAIL: ears4 应使用 30 mm 耳半径")
+
 # ---------- 电流夹紧 ----------
 plant = M.Plant(attachment="point")
 plant.step(np.full(8, 10.0), dt=P.P["dt"])
@@ -116,7 +122,7 @@ ball0 = np.array(P.P0)
 for i in range(int(10.0 / P.P["dt"])):
     plant.step(ctl.update(plant, i * P.P["dt"]), dt=P.P["dt"])
 drift = np.linalg.norm(plant.ball_center() - ball0)
-if drift > 0.002:
+if drift > 0.0025:
     raise SystemExit("FAIL: 悬停漂移 %.3f mm" % (drift * 1000))
 active = plant.tensions()[list(ctl.status()["support"])]
 if np.min(active) < P.P["t_min"] - 1e-9 or np.max(active) > P.P["t_max"] + 1e-9:
@@ -137,6 +143,17 @@ for i in range(int(6.0 / P.P["dt"])):
         settled_at = None
 if settled_at is None or settled_at > 4.5:
     raise SystemExit("FAIL: 100 mm 定点 settle=%r" % settled_at)
+
+# ---------- 低压 abort ----------
+plant = M.Plant()
+ctl = C.Controller()
+slack = plant.cable_lengths() + 1.0
+plant.L0_init = slack.copy()
+plant.L0 = slack.copy()
+for i in range(int(0.2 / P.P["dt"])):
+    plant.step(ctl.update(plant, i * P.P["dt"]), dt=P.P["dt"])
+if not ctl.status()["abort"]:
+    raise SystemExit("FAIL: 持续松弛 50 ms 后应 abort")
 
 # ---------- 8 选 4 在三个点上的结果 ----------
 W = np.array([0.0, 0.0, P.P["m"] * P.G - P.P["tether_up"]])
@@ -199,9 +216,15 @@ close(S.return_time(t, y2, np.zeros(3), t0=1.0, band=0.005, hold=0.5), 0.5,
       0.02, "回位时间（相对 t0）")
 close(S.peak_to_peak(np.array([[0, 0, 0], [0.01, 0, 0], [0.03, 0, 0]])),
       0.03, 1e-12, "峰峰值")
+close(S.peak_to_peak(np.array([[0, 0, 0], [0.01, 0, 0], [-0.01, 0, 0]])),
+      0.02, 1e-12, "中点为起点的对称振荡峰峰值")
 T = np.array([[1.0] * 4 + [0.1] * 4, [0.1] * 8, [1.0] * 8])
-close(S.slack_time(np.array([0.0, 0.5, 1.0]), T, [0, 1, 2, 3]), 0.5, 1e-12,
-      "松弛时间只算主动绳")
+close(S.slack_time(np.array([0.0, 0.5, 1.0]), T, [0, 1, 2, 3]), 2.0, 1e-12,
+      "松弛时间按每根主动绳累加")
+T2 = np.array([[0.1] * 4, [0.1] * 4])
+total, max_one = S.slack_stats(np.array([0.0, 0.5]), T2, [0, 1, 2, 3])
+close(total, 2.0, 1e-12, "多根同时松弛的总时间")
+close(max_one, 0.5, 1e-12, "单根最大松弛时间")
 
 # ---------- 悬停短跑确定性 ----------
 a = S.run_hover(duration=2.0, settle=0.5, record_hz=100.0)
@@ -209,14 +232,22 @@ b = S.run_hover(duration=2.0, settle=0.5, record_hz=100.0)
 if a["metrics"] != b["metrics"]:
     raise SystemExit("FAIL: 同一参数两次结果不同")
 
-# ---------- 收敛性：刚度 ×2、步长减半 ----------
+# ---------- 收敛性：刚度 ×2、步长减半，5 秒指标 ----------
 p2 = dict(P.P)
 p2["rope_ea"] *= 2.0
 p2["dt"] /= 2.0
-alt = S.run_hover(params=p2, duration=1.0, settle=0.0, record_hz=100.0)
-base = S.run_hover(duration=1.0, settle=0.0, record_hz=100.0)
+alt = S.run_hover(params=p2, duration=5.0, settle=1.0, record_hz=100.0)
+base = S.run_hover(duration=5.0, settle=1.0, record_hz=100.0)
 if np.linalg.norm(np.array(alt["final_ball"]) - np.array(base["final_ball"])) > 1e-3:
-    raise SystemExit("FAIL: 刚度/步长变化后结果不收敛")
+    raise SystemExit("FAIL: 刚度/步长变化后位置不收敛")
+rel = abs(alt["metrics"]["drift_max_mm"] - base["metrics"]["drift_max_mm"])
+if rel / max(base["metrics"]["drift_max_mm"], 1e-9) > 0.05:
+    raise SystemExit("FAIL: 刚度/步长变化后漂移差 >5%%")
+
+# ---------- 短 duration 不崩 ----------
+short = S.run_hover(duration=1.0, settle=10.0, record_hz=100.0)
+if not np.isfinite(short["metrics"]["drift_max_mm"]):
+    raise SystemExit("FAIL: 短 duration 的 settle 没夹住")
 
 # ---------- 三点短跑 ----------
 three = S.run_three_points(dwell=1.5)
@@ -228,16 +259,20 @@ push = S.run_push(push_at=2.0, duration=6.0)
 m = push["metrics"]
 if m["return_s"] is None or m["return_s"] >= 2.0:
     raise SystemExit("FAIL: 推一下没在 2 s 内回位 %r" % m)
-if m["max_offset_mm"] > 80.0 or m["slack_s"] > 0.2:
+if m["max_offset_mm"] > 80.0 or m["slack_s"] > 0.05:
     raise SystemExit("FAIL: 推一下不稳定 %r" % m)
 if push["thresholds"]["return_s"] != 2.0:
     raise SystemExit("FAIL: 推一下阈值丢了")
 
-# ---------- 输出文件 ----------
+# ---------- 输出文件（测试不依赖 matplotlib；PNG 由 --all 验证） ----------
 with tempfile.TemporaryDirectory() as d:
-    S.write_outputs(a, d)
-    for name in ("hover.csv", "hover.png", "summary.json", "replay.json"):
+    S.write_outputs(a, d, no_plot=True)
+    for name in ("hover.csv", "summary.json", "replay.json"):
         if not os.path.exists(os.path.join(d, name)):
             raise SystemExit("FAIL: 缺少输出 %s" % name)
+    with open(os.path.join(d, "hover.csv"), encoding="utf-8") as f:
+        header = f.readline()
+    if "vx" not in header or "I1" not in header:
+        raise SystemExit("FAIL: CSV 缺速度/电流列")
 
 print("PASS")

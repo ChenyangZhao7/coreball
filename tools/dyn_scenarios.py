@@ -2,7 +2,6 @@
 import argparse
 import csv
 import json
-import math
 import os
 
 import numpy as np
@@ -41,11 +40,12 @@ def return_time(t, y, target, t0, band=0.005, hold=0.5):
 
 
 def peak_to_peak(y):
+    """真正的峰峰值：点集里最远两点的距离（不是相对首点）。"""
     y = np.asarray(y, dtype=float)
     if len(y) < 2:
         return 0.0
-    d = np.linalg.norm(y - y[0], axis=1)
-    return float(d.max() - d.min())
+    diff = y[:, None, :] - y[None, :, :]
+    return float(np.linalg.norm(diff, axis=2).max())
 
 
 def max_drift(y, target):
@@ -58,15 +58,23 @@ def rms_drift(y, target):
     return float(np.sqrt(np.mean(d ** 2))) if len(d) else 0.0
 
 
-def slack_time(t, tensions, active):
+def slack_stats(t, tensions, active):
+    """每根主动绳各自的松弛累计时间，返回 (总和, 最大值)。"""
     t = np.asarray(t, dtype=float)
     tensions = np.asarray(tensions, dtype=float)
     active = list(active)
-    total = 0.0
+    per = np.zeros(len(active))
     for i in range(len(t) - 1):
-        if np.any(tensions[i, active] < 0.30):
-            total += t[i + 1] - t[i]
-    return float(total)
+        dt = t[i + 1] - t[i]
+        for k, idx in enumerate(active):
+            if tensions[i, idx] < 0.30:
+                per[k] += dt
+    return float(per.sum()), float(per.max() if len(per) else 0.0)
+
+
+def slack_time(t, tensions, active):
+    """兼容旧调用：返回所有主动绳松弛时间的总和。"""
+    return slack_stats(t, tensions, active)[0]
 
 
 # ---------------- 运行 ----------------
@@ -79,25 +87,31 @@ def _new_run(params=None, ball=P.P0):
 
 def _empty_series():
     return {"t": [], "ball": [], "hub": [], "q": [], "w": [],
-            "tensions": [], "lengths": [], "support": [], "phases": []}
+            "vel": [], "current": [], "tensions": [], "lengths": [],
+            "support": [], "phases": [], "ref": [], "switching": []}
 
 
 def _record(series, t, plant, ctl, phase=""):
+    status = ctl.status()
     series["t"].append(float(t))
     series["ball"].append(plant.ball_center().copy())
     series["hub"].append(plant.r.copy())
     series["q"].append(plant.q.copy())
     series["w"].append(plant.w.copy())
+    series["vel"].append(plant.v.copy())
+    series["current"].append(plant.current.copy())
     series["tensions"].append(plant.tensions().copy())
     series["lengths"].append(plant.cable_lengths().copy())
-    series["support"].append(tuple(ctl.status()["support"]))
+    series["support"].append(tuple(status["support"]))
     series["phases"].append(phase)
+    series["ref"].append(np.asarray(status["p_ref"], dtype=float).copy())
+    series["switching"].append(bool(status["switching"]))
 
 
 def _finalize(series):
     out = {}
     for key, value in series.items():
-        if key in ("support", "phases"):
+        if key in ("support", "phases", "switching"):
             out[key] = list(value)
         else:
             out[key] = np.array(value, dtype=float)
@@ -143,6 +157,10 @@ def _thresholds(name):
 
 
 def run_hover(params=None, duration=60.0, settle=10.0, record_hz=100.0):
+    duration = float(duration)
+    if duration <= 0:
+        raise ValueError("duration 必须大于 0")
+    settle = min(float(settle), duration * 0.95)
     p, plant, ctl = _new_run(params)
     series = _simulate(plant, ctl, duration, record_hz, push_at=None)
     t, ball = series["t"], series["ball"]
@@ -150,12 +168,14 @@ def run_hover(params=None, duration=60.0, settle=10.0, record_hz=100.0):
     target = np.array(P.P0)
     active = list(ctl.status()["support"])
     ten = series["tensions"][mask]
+    slack_total, slack_max = slack_stats(t[mask], ten, active)
     metrics = {
         "drift_max_mm": max_drift(ball[mask], target) * 1000.0,
         "drift_rms_mm": rms_drift(ball[mask], target) * 1000.0,
         "tension_min_n": float(np.min(ten[:, active])),
         "tension_max_n": float(np.max(ten[:, active])),
-        "slack_s": slack_time(t[mask], ten, active),
+        "slack_s": slack_total,
+        "slack_max_s": slack_max,
         "switches": int(ctl.status()["switches"]),
     }
     th = _thresholds("hover")
@@ -220,11 +240,17 @@ def run_three_points(params=None, dwell=5.0, record_hz=100.0):
 
     pp_mm = max([x for x in pps if x is not None], default=float("inf"))
     settle_s = max([x for x in settles if x is not None], default=float("inf"))
+    sw_mask = np.array(series["switching"], dtype=bool)
+    if sw_mask.any():
+        switch_offset_mm = float(np.max(np.linalg.norm(
+            series["ball"][sw_mask] - series["ref"][sw_mask], axis=1))) * 1000.0
+    else:
+        switch_offset_mm = 0.0
     metrics = {
         "pp_mm": pp_mm,
         "settle_s": settle_s,
         "switches": int(ctl.status()["switches"]),
-        "switch_offset_mm": 0.0,
+        "switch_offset_mm": switch_offset_mm,
     }
     th = _thresholds("three_points")
     passed = (pp_mm < th["pp_mm"] and settle_s < th["settle_s"]
@@ -236,6 +262,10 @@ def run_three_points(params=None, dwell=5.0, record_hz=100.0):
 
 def run_push(params=None, impulse=0.2, push_at=10.0, duration=12.0,
              record_hz=100.0):
+    duration = float(duration)
+    if duration <= 0:
+        raise ValueError("duration 必须大于 0")
+    push_at = min(float(push_at), duration * 0.5)
     p, plant, ctl = _new_run(params)
     series = _simulate(plant, ctl, duration, record_hz,
                        push=impulse, push_at=push_at)
@@ -250,6 +280,7 @@ def run_push(params=None, impulse=0.2, push_at=10.0, duration=12.0,
     first_t0 = push_at if len(left) == 0 else float(t[left[0]])
     first_entry_s = settle_time(t, ball, target, band=0.005, hold=0.0,
                                 t0=first_t0)
+    slack_total, slack_max = slack_stats(t[mask], ten, active)
     metrics = {
         "return_s": return_s,
         "first_entry_s": first_entry_s,
@@ -257,7 +288,8 @@ def run_push(params=None, impulse=0.2, push_at=10.0, duration=12.0,
         "overshoot_mm": max(0.0, float(np.max(ball[mask, 0]) - target[0])) * 1000.0,
         "tension_min_n": float(np.min(ten[:, active])),
         "tension_max_n": float(np.max(ten[:, active])),
-        "slack_s": slack_time(t[mask], ten, active),
+        "slack_s": slack_total,
+        "slack_max_s": slack_max,
     }
     th = _thresholds("push")
     passed = (return_s is not None and return_s < th["return_s"]
@@ -294,13 +326,16 @@ def _write_csv(result, path):
         writer = csv.writer(f)
         header = (["t", "ball_x", "ball_y", "ball_z",
                    "hub_x", "hub_y", "hub_z",
+                   "vx", "vy", "vz",
                    "qw", "qx", "qy", "qz", "wx", "wy", "wz"]
+                  + ["I%d" % (i + 1) for i in range(8)]
                   + ["T%d" % (i + 1) for i in range(8)]
                   + ["L%d" % (i + 1) for i in range(8)])
         writer.writerow(header)
         for i in range(len(s["t"])):
             row = ([s["t"][i]] + list(s["ball"][i]) + list(s["hub"][i])
-                   + list(s["q"][i]) + list(s["w"][i])
+                   + list(s["vel"][i]) + list(s["q"][i]) + list(s["w"][i])
+                   + list(s["current"][i])
                    + list(s["tensions"][i]) + list(s["lengths"][i]))
             writer.writerow(["%.9g" % x for x in row])
 
@@ -352,16 +387,20 @@ def write_outputs(result, out_dir, no_plot=False):
         json.dump(summary, f, ensure_ascii=False, indent=2)
 
     s = result["series"]
-    step = max(1, int(round(1.0 / (10.0 * np.median(np.diff(s["t"]))))))
+    med = float(np.median(np.diff(s["t"]))) if len(s["t"]) >= 2 else 0.01
+    step = max(1, int(round(1.0 / (10.0 * med))))
     replay = []
     for i in range(0, len(s["t"]), step):
         replay.append({
             "t": float(s["t"][i]),
             "ball": [float(x) for x in s["ball"][i]],
             "hub": [float(x) for x in s["hub"][i]],
+            "vel": [float(x) for x in s["vel"][i]],
             "support": list(s["support"][i]),
+            # 原始 8 根张力；/state 的 4 根可按 support 取子集
             "tensions": [float(x) for x in s["tensions"][i]],
             "lengths": [float(x) for x in s["lengths"][i]],
+            "currents": [float(x) for x in s["current"][i]],
         })
     with open(os.path.join(out_dir, "replay.json"), "w", encoding="utf-8") as f:
         json.dump(replay, f, ensure_ascii=False)
