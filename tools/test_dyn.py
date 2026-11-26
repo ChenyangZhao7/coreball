@@ -138,4 +138,47 @@ for i in range(int(6.0 / P.P["dt"])):
 if settled_at is None or settled_at > 4.5:
     raise SystemExit("FAIL: 100 mm 定点 settle=%r" % settled_at)
 
+# ---------- 8 选 4 在三个点上的结果 ----------
+W = np.array([0.0, 0.0, P.P["m"] * P.G - P.P["tether_up"]])
+for ball, want in [(P.P0, P.SUPPORT_P0), (P.P1, P.SUPPORT_P1), (P.P2, P.SUPPORT_P2)]:
+    r = C.best_support(P.hub_of(ball), W)
+    if tuple(r["idx"]) != want:
+        raise SystemExit("FAIL: %r 支撑 %r != %r" % (ball, r["idx"], want))
+
+# ---------- 交叉时合力不翻倍、不丢力（共享锚点相加） ----------
+point = np.array(P.hub_of(P.P0))
+T = C.crossfade_tensions(point, W, P.SUPPORT_P0, P.SUPPORT_P1, 0.5)
+s = np.zeros(3)
+for i, a in enumerate(ALL_ANCHORS):
+    d = np.array(a) * P.MM - point
+    s += T[i] * d / np.linalg.norm(d)
+if np.linalg.norm(s - W) > 1e-6:
+    raise SystemExit("FAIL: 交叉合力 %r != %r" % (s, W))
+
+# ---------- 三点短跑：至少切一次，偏移 <100 mm ----------
+plant = M.Plant()
+ctl = C.Controller()
+ctl.start_move(P.P1)
+max_off = 0.0
+for i in range(int(5.0 / P.P["dt"])):
+    t = i * P.P["dt"]
+    plant.step(ctl.update(plant, t), dt=P.P["dt"])
+    ref = ctl.status()["p_ref"]
+    max_off = max(max_off, np.linalg.norm(plant.ball_center() - ref))
+if ctl.status()["switches"] != 0:
+    raise SystemExit("FAIL: 固定支撑下不应切换")
+if max_off > 0.100:
+    raise SystemExit("FAIL: 跟踪偏移 %.1f mm" % (max_off * 1000))
+
+# ---------- 实验开关：真的会切；瞬态大小只记录，不作验收 ----------
+params = dict(P.P)
+params["switching"] = True
+plant = M.Plant(params=params)
+ctl = C.Controller(params=params)
+ctl.start_move((0.300, 0.520, 1.300))
+for i in range(int(4.0 / params["dt"])):
+    plant.step(ctl.update(plant, i * params["dt"]), dt=params["dt"])
+if ctl.status()["switches"] < 1:
+    raise SystemExit("FAIL: switching=True 时没有切换")
+
 print("PASS")

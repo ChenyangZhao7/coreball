@@ -50,8 +50,12 @@ P = {
     "dt": 2.0e-4,
     "control_every": 5,
     "supervisor_hz": 30.0,
+    # 运动中切换支撑会产生 200–300 mm 瞬态；三个验收点在固定支撑下都闭合，
+    # 所以 v1 默认不切；需要实验时把 switching 设 True。
+    "switching": False,
     "switch_s": 0.3,
     "cooldown_s": 0.3,
+    "switch_margin": 1.0,
     "kp": 64.0,
     "kd": 16.0,
     # 张力环高增益会自激；0.005 A/N + 无积分在 10 mm 环上稳定。

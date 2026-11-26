@@ -5,6 +5,7 @@ import numpy as np
 
 import dyn_model as M
 import dyn_params as P
+import tension
 from tension import solve_force
 
 
@@ -26,6 +27,39 @@ def move_duration(distance, vmax, amax):
                math.sqrt(5.7735 * distance / amax), 0.5)
 
 
+def smoothstep(x):
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
+def best_support(point, W):
+    """8 选 4：四根都不超上限，按 margin - 0.005*ΣT 取最高。"""
+    best = None
+    for idx in tension.SUBSETS4:
+        try:
+            r = solve_force(point, W, idx, P.ANCHORS)
+        except ValueError:
+            continue
+        if min(r["T"]) < -1e-9 or max(r["T"]) > P.P["t_max"]:
+            continue
+        score = r["margin"] - 0.005 * sum(r["T"])
+        if best is None or score > best["score"]:
+            best = dict(r, idx=list(idx), score=score)
+    return best
+
+
+def crossfade_tensions(point, W, old_idx, new_idx, lam):
+    """旧/新组各解完整 W 的张力，再按 (1-lam)/lam 缩放；共享锚点相加。"""
+    old = solve_force(point, W, old_idx, P.ANCHORS)
+    new = solve_force(point, W, new_idx, P.ANCHORS)
+    out = np.zeros(8)
+    for j, i in enumerate(old_idx):
+        out[i] += (1.0 - lam) * old["T"][j]
+    for j, i in enumerate(new_idx):
+        out[i] += lam * new["T"][j]
+    return out
+
+
 class Controller:
     def __init__(self, params=None, target_ball=P.P0):
         self.p = dict(P.P if params is None else params)
@@ -40,8 +74,15 @@ class Controller:
         self.move_pending = False
 
         self.support = tuple(P.SUPPORT_P0)
+        self.active = set(self.support)
         self.switches = 0
+        self.enable_switching = bool(self.p.get("switching", False))
         self.switching = False
+        self.old_support = None
+        self.new_support = None
+        self.switch_t0 = 0.0
+        self.last_supervisor = -1e9
+        self.cooldown_until = -1e9
         self.abort = False
 
         self.T_target = np.zeros(8)
@@ -85,7 +126,7 @@ class Controller:
         self.v_ref = sd * delta
         self.a_ref = sa * delta
 
-    def _outer(self, plant):
+    def _outer(self, plant, t):
         rotation = M.quat_to_R(plant.q)
         offset = rotation @ np.array([0.0, 0.0, -self.p["ball_offset"]])
         p_ball = plant.r + offset
@@ -97,11 +138,74 @@ class Controller:
              + np.array([0.0, 0.0, self.p["m"] * P.G - self.p["tether_up"]]))
         self.last_W = W
 
-        solved = solve_force(tuple(plant.r), tuple(W), self.support, P.ANCHORS)
-        target = np.full(8, self.p["idle_tension"])
-        for j, i in enumerate(self.support):
-            target[i] = solved["T"][j]
+        self._supervise(plant, t, W)
+
+        if self.switching:
+            lam = smoothstep((t - self.switch_t0) / self.p["switch_s"])
+            # 交叉期间只用静重：PD 的水平分量可能让新组在实测位置不可行，
+            # 强行分配会出现负张力，球会直接掉下去。
+            W_switch = np.array(
+                [0.0, 0.0, self.p["m"] * P.G - self.p["tether_up"]])
+            target = crossfade_tensions(
+                tuple(plant.r), tuple(W_switch), self.old_support,
+                self.new_support, lam)
+            if lam >= 1.0:
+                self.support = tuple(self.new_support)
+                self.active = set(self.support)
+                self.switching = False
+                self.switches += 1
+                self.cooldown_until = t + self.p["cooldown_s"]
+                self.old_support = None
+                self.new_support = None
+        else:
+            solved = solve_force(tuple(plant.r), tuple(W), self.support, P.ANCHORS)
+            target = np.zeros(8)
+            for j, i in enumerate(self.support):
+                target[i] = solved["T"][j]
+
+        for i in range(8):
+            if i not in self.active:
+                target[i] = self.p["idle_tension"]
         self.T_target = target
+
+    def _supervise(self, plant, t, W):
+        if not self.enable_switching:
+            return
+        if self.switching or t < self.cooldown_until:
+            return
+        if t - self.last_supervisor < 1.0 / self.p["supervisor_hz"]:
+            return
+        self.last_supervisor = t
+
+        # 按**实测**吊点选支撑：参考点跑在前面时，按参考选出的组可能在
+        # 球的实际位置根本闭不上，切换后会直接掉下去。
+        hub_ref = np.array(plant.r)
+        # 选支撑组只看静重，不看瞬时加减速：否则加速段会把组换来换去
+        W_static = np.array([0.0, 0.0, self.p["m"] * P.G - self.p["tether_up"]])
+        best = best_support(tuple(hub_ref), tuple(W_static))
+        if best is None or best["margin"] < self.p["switch_margin"]:
+            return  # 没有余量足够好的替代组时，守着当前组
+        try:
+            current = solve_force(tuple(hub_ref), tuple(W_static),
+                                  self.support, P.ANCHORS)
+            current_score = current["margin"] - 0.005 * sum(current["T"])
+            current_margin = current["margin"]
+        except ValueError:
+            current_score = -1e9
+            current_margin = -1e9
+
+        if tuple(best["idx"]) == tuple(self.support):
+            return
+        # 停着且当前组还绷得住时不要换：悬停不应该因为姿态微调去切支撑
+        if not self.moving and current_margin >= self.p["t_min"]:
+            return
+        # 只有当前组余量掉到 1.0 N 以下才换；分数略高不构成切换理由
+        if current_margin < self.p["switch_margin"]:
+            self.switching = True
+            self.old_support = tuple(self.support)
+            self.new_support = tuple(best["idx"])
+            self.switch_t0 = t
+            self.active = set(self.old_support) | set(self.new_support)
 
     def _servo(self, plant):
         measured = plant.tensions()
@@ -111,7 +215,7 @@ class Controller:
         kt = self.p["kt"]
 
         for i in range(8):
-            if i in self.support:
+            if i in self.active:
                 desired = self.T_target[i]
                 error = desired - measured[i]
                 self.integral[i] = np.clip(
@@ -134,7 +238,7 @@ class Controller:
         self._reference(t)
         self.steps += 1
         if self.steps == 1 or self.steps % self.p["control_every"] == 0:
-            self._outer(plant)
+            self._outer(plant, t)
         return self._servo(plant)
 
     def status(self):
@@ -142,6 +246,7 @@ class Controller:
             "p_ref": self.p_ref.copy(),
             "v_ref": self.v_ref.copy(),
             "support": list(self.support),
+            "active": sorted(self.active),
             "switching": self.switching,
             "switches": self.switches,
             "abort": self.abort,
