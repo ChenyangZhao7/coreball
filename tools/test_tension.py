@@ -62,4 +62,22 @@ for idx in T.SUBSETS4:
     if score > r["score"] + 1e-9:
         raise SystemExit("FAIL: 组合 %r 分数更高却没被选中" % (idx,))
 
+# ---------- 任意期望力：Σ T·u = W ----------
+W = (0.25, -0.40, 4.20)
+r = T.solve_force(HUB, W, [1, 2, 3, 5], T.ALL_ANCHORS)
+for k in range(3):
+    s = sum(r["T"][i] * r["u"][i][k] for i in range(4))
+    eq(s, W[k], "任意力平衡 %s" % "xyz"[k], 1e-9)
+
+# ---------- 8 选 4 也接受任意力 ----------
+r = T.solve_selected(HUB, (0.8, 0.0, 4.305))
+for k in range(3):
+    s = sum(r["T"][i] * r["u"][i][k] for i in range(4))
+    eq(s, (0.8, 0.0, 4.305)[k], "选绳后力平衡 %s" % "xyz"[k], 1e-6)
+
+# ---------- 缺省行为不变 ----------
+a = T.solve_selected(HUB)
+b = T.solve_selected(HUB, (0.0, 0.0, T.BALL_MASS * T.G - T.TETHER_UP))
+eq(a["score"], b["score"], "缺省 W 与重力一致", 1e-12)
+
 print("PASS")

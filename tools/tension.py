@@ -73,10 +73,15 @@ def inv3(m):
 
 
 # ---------------- 主计算 ----------------
-def solve_subset(point, idx, anchors=None):
-    """给定 4 个锚点索引，解最小范数特解 + 零空间 max-min。"""
+def solve_subset(point, idx, anchors=None, W=None):
+    """给定 4 个锚点索引，解最小范数特解 + 零空间 max-min。
+
+    W 是希望四根绳提供的合力（N）；缺省为重力减供电上拉力。
+    """
     anchors = anchors if anchors is not None else ANCHORS
     P = tuple(point)
+    if W is None:
+        W = (0.0, 0.0, BALL_MASS * G - TETHER_UP)
 
     u = []
     lengths = []
@@ -84,8 +89,6 @@ def solve_subset(point, idx, anchors=None):
         d = sub(anchors[i], P)
         lengths.append(norm(d))
         u.append(unit(d))
-
-    W = (0.0, 0.0, BALL_MASS * G - TETHER_UP)
     row = []
     for k in range(3):
         row.append([u[j][k] for j in range(4)])
@@ -148,11 +151,18 @@ def _combos4(n):
 SUBSETS4 = _combos4(len(ALL_ANCHORS))
 
 
-def solve_selected(point):
+def solve_force(point, W, idx=None, anchors=None):
+    """指定支撑组，解出提供合力 W 的四根张力。"""
+    idx = [0, 1, 2, 3] if idx is None else list(idx)
+    anchors = anchors if anchors is not None else ANCHORS
+    return solve_subset(point, idx, anchors, W=W)
+
+
+def solve_selected(point, W=None):
     """8 选 4：四根都绷得住、余量最大；其余 4 根当闲散绳。"""
     best = fallback = None
     for idx in SUBSETS4:
-        r = solve_subset(point, idx, ALL_ANCHORS)
+        r = solve_subset(point, idx, ALL_ANCHORS, W=W)
         if max(r["T"]) > T_MAX:
             continue
         if r["margin"] >= T_MIN:
