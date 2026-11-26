@@ -107,6 +107,15 @@ class ArbiterTest(unittest.TestCase):
         self.a.submit(cmd(source="voice"))
         self.assertEqual(len(self.a.status()["suggestions"]), 1)
 
+    def test_prediction_suggestion_replaces_old(self):
+        self.a.set_mode("auto")
+        self.a.submit(cmd(source="prediction"))
+        first = self.a.status()["suggestions"][0]["id"]
+        self.a.submit(cmd(source="prediction"))
+        suggestions = self.a.status()["suggestions"]
+        self.assertEqual(len(suggestions), 1)
+        self.assertNotEqual(suggestions[0]["id"], first)
+
 
 class HistoryTest(unittest.TestCase):
     def test_append_recent(self):
@@ -115,3 +124,11 @@ class HistoryTest(unittest.TestCase):
             h.append({"id": "1", "source": "manual"})
             h.append({"id": "2", "source": "voice"})
             self.assertEqual([x["id"] for x in h.recent(10)], ["1", "2"])
+
+    def test_history_is_trimmed_and_zero_is_empty(self):
+        with tempfile.TemporaryDirectory() as d:
+            h = History(Path(d) / "history.jsonl", limit=2)
+            for i in range(3):
+                h.append({"id": str(i)})
+            self.assertEqual([x["id"] for x in h.recent(10)], ["1", "2"])
+            self.assertEqual(h.recent(0), [])

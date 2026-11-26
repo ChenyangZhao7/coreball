@@ -45,7 +45,14 @@ class LinkTest(unittest.TestCase):
         holder.bind(("127.0.0.1", 0))
         port = holder.getsockname()[1]
         try:
-            with self.assertRaises(OSError):
+            with self.assertRaises(OSError) as ctx:
                 Link(telemetry_addr=("127.0.0.1", port)).start()
+            self.assertIn("control_server", str(ctx.exception))
         finally:
             holder.close()
+
+    def test_connected_at_one_second_is_false(self):
+        link = Link(now=lambda: 100.0)
+        raw = json.dumps({"ball": [0, 0, 1300]}).encode()
+        link.put_telemetry(raw, now=99.0)
+        self.assertFalse(link.connected(max_age=1.0))

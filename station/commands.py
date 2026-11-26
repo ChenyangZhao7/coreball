@@ -136,7 +136,7 @@ class Arbiter:
         if ttl is None:
             ttl = config.DEFAULT_TTL.get(command.kind, 5.0)
         now = self.now()
-        if ttl and now - command.created_at >= ttl:
+        if ttl and ttl > 0 and now - command.created_at >= ttl:
             command.status = "expired"
             return "expired"
 
@@ -182,9 +182,12 @@ class Arbiter:
 
     def _suggest(self, command):
         command.status = "suggested"
+        if command.source == "prediction":
+            self.suggestions = [c for c in self.suggestions
+                                if c.source != "prediction"]
         self.suggestions = [c for c in self.suggestions if c.id != command.id]
-        self.suggestions.append(command)
-        self.suggestions = self.suggestions[-20:]
+        self.suggestions.insert(0, command)  # 最新的在最前
+        self.suggestions = self.suggestions[:20]
         return "suggested"
 
     def accept(self, sid):

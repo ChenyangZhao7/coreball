@@ -54,7 +54,7 @@ Invoke-RestMethod http://127.0.0.1:8030/api/settings -Method Post -ContentType a
 - 控制台把 `z` 夹到 **900–1500 mm**；x/y 原样发，由 `blender/cmd_runtime.py` 的 `clamp_ball` 夹。
 - 遥测里同时有 `requested` 和实际 `ball`；被安全层改写时 UI 会显示「安全修正」。
 - `telem.body != "winch"` 时只读，禁用 goto/高度/预设（v1 只控制吊索）。
-- 遥测超过 1 s 显示「遥测过期」，超过 3 s 显示「未连接」；运动按钮禁用，停止仍可用。
+- 遥测 ≥1 s 显示「遥测离线」；运动按钮禁用，停止仍可用。
 - 预测是**模拟**：固定 `当前球 + (200,0,0)`，置信度 0.75；不是真模型。
 
 ## 测试

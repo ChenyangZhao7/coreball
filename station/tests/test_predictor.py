@@ -12,7 +12,7 @@ class PredictorTest(unittest.TestCase):
         self.sent.append(cmd)
 
     def latest(self):
-        return {"ball": self.ball}
+        return {"ball": self.ball, "body": "winch"}
 
     def test_tick_builds_suggestion(self):
         p = Predictor(self.submit, self.latest, now=lambda: 100.0)
@@ -37,6 +37,13 @@ class PredictorTest(unittest.TestCase):
 
     def test_stale_telemetry_is_ignored(self):
         p = Predictor(self.submit,
-                      lambda: {"ball": self.ball, "stale": True},
+                      lambda: {"ball": self.ball, "body": "winch", "stale": True},
                       now=lambda: 100.0)
         self.assertIsNone(p.tick(100.0))
+
+    def test_rover_is_read_only(self):
+        p = Predictor(self.submit,
+                      lambda: {"ball": self.ball, "body": "rover"},
+                      now=lambda: 100.0)
+        self.assertIsNone(p.tick(100.0))
+        self.assertEqual(self.sent, [])

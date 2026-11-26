@@ -251,7 +251,7 @@ function render(){
   $("source").textContent = "来源：" + (state.current_source || "—");
   $("autoPred").checked = !!state.prediction_auto;
 
-  const isWinch = !t || !t.body || t.body === "winch";
+  const isWinch = !t || t.body === "winch";
   $("readonly").style.display = isWinch ? "none" : "block";
   const disabled = !isWinch || !connected;
   $("send").disabled = disabled;
@@ -259,11 +259,20 @@ function render(){
   document.querySelectorAll("[data-preset],[data-expr]").forEach(b=>b.disabled = disabled);
   $("zr").disabled = disabled; $("iz").disabled = disabled;
   $("ix").disabled = disabled; $("iy").disabled = disabled;
+  $("sugAccept").disabled = disabled;
+  $("autoPred").disabled = !isWinch;
+  const zNow = t && t.ball ? Number(t.ball[2]) : null;
+  const up = document.querySelector('[data-preset="up"]');
+  const down = document.querySelector('[data-preset="down"]');
+  if(up) up.disabled = disabled || (zNow !== null && zNow + 120 > 1500);
+  if(down) down.disabled = disabled || (zNow !== null && zNow - 120 < 900);
 
   $("sBall").textContent = t ? point(t.ball) : "—";
   $("sHub").textContent = t ? point(t.hub) : "—";
   $("sTarget").textContent = point([target.x, target.y, target.z]);
-  $("sReq").textContent = (t && t.requested) ? point(t.requested.point || t.requested) : "—";
+  const req = (state.active && state.active.requested && state.active.requested.point)
+    || (t && t.requested && (t.requested.point || t.requested));
+  $("sReq").textContent = req ? point(req) : "—";
   $("sAge").textContent = state.link.age_ms === null || state.link.age_ms === undefined
     ? "—" : state.link.age_ms + " ms";
   $("sLast").textContent = t ? (t.last || "—") : "—";
@@ -379,12 +388,16 @@ async function sendTarget(){
   if(!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)){
     toast("目标必须是数字"); return;
   }
-  target = {x, y, z: Math.min(1500, Math.max(900, z))};
-  syncTargetInputs();
+  target = {x, y, z};
   try{
     const r = await api("/api/command", {source:"manual", kind:"goto",
       payload:{point:[target.x, target.y, target.z]}, reason:"手动目标"});
-    toast("已接受" + (r && r.status === "accepted" ? "" : "：" + r.status));
+    let extra = "";
+    if(r && r.command && r.command.requested && r.command.payload){
+      const raw = r.command.requested.point, got = r.command.payload.point;
+      if(raw && got && raw[2] !== got[2]) extra = "（z " + raw[2] + " → " + got[2] + "）";
+    }
+    toast("已接受" + extra + (r && r.status === "accepted" ? "" : "：" + r.status));
     refresh();
   }catch(e){ toast(e.message); }
 }

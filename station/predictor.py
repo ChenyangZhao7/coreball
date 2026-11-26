@@ -20,7 +20,8 @@ class Predictor:
     def tick(self, now=None):
         now = self.now() if now is None else float(now)
         snap = self.latest()
-        if not snap or not snap.get("ball") or snap.get("stale"):
+        if (not snap or not snap.get("ball") or snap.get("stale")
+                or snap.get("body") != "winch"):
             return None
         if now - self.last < self.interval:
             return None

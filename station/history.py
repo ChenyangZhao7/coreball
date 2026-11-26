@@ -16,14 +16,20 @@ class History:
         with self._lock:
             with open(self.path, "a", encoding="utf-8") as f:
                 f.write(line)
+            if self.limit > 0:
+                lines = self.path.read_text(encoding="utf-8").splitlines()
+                if len(lines) > self.limit:
+                    with open(self.path, "w", encoding="utf-8") as f:
+                        f.write("\n".join(lines[-self.limit:]) + "\n")
 
     def recent(self, n=50):
-        if not self.path.exists():
+        n = int(n)
+        if n <= 0 or not self.path.exists():
             return []
         with self._lock:
             lines = self.path.read_text(encoding="utf-8").splitlines()
         out = []
-        for line in lines[-max(1, int(n)):]:
+        for line in lines[-n:]:
             try:
                 out.append(json.loads(line))
             except json.JSONDecodeError:

@@ -1,6 +1,7 @@
 """控制台入口：HTTP API + 静态页 + UDP link。"""
 import argparse
 import json
+import math
 import sys
 import threading
 import time
@@ -34,23 +35,51 @@ class App:
     # ---------------- 命令 ----------------
     def submit(self, source, kind, payload, reason="", ttl_s=None,
                confidence=1.0):
+        if not isinstance(source, str) or not isinstance(kind, str):
+            return 400, {"ok": False, "error": "source/kind 必须是字符串"}
         if not source or not kind:
             return 400, {"ok": False, "error": "source/kind 不能为空"}
         if source not in self.cfg.PRIORITIES or kind not in commands.KINDS:
             return 409, {"ok": False, "error": "source/kind 不合法"}
         if kind == "jog" and source != "manual":
             return 409, {"ok": False, "error": "只有 manual 可以 jog"}
+        if ttl_s is not None:
+            if (isinstance(ttl_s, bool) or not isinstance(ttl_s, (int, float))
+                    or not math.isfinite(ttl_s) or ttl_s < 0):
+                return 400, {"ok": False, "error": "ttl_s 必须是 >=0 的数字"}
+        if (isinstance(confidence, bool) or not isinstance(confidence, (int, float))
+                or not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0):
+            return 400, {"ok": False, "error": "confidence 必须是 0–1 的数字"}
         command = commands.Command(
             source=source, kind=kind, payload=payload or {},
-            reason=reason or "", ttl_s=ttl_s, confidence=float(confidence or 1.0),
+            reason=reason or "", ttl_s=ttl_s, confidence=float(confidence),
             created_at=self.now())
         return self.submit_command(command)
 
     def submit_command(self, command):
         with self.lock:
+            tele = self.link.latest()
+            payload = command.payload if isinstance(command.payload, dict) else {}
+            if (command.kind in ("goto", "jog", "preset")
+                    and tele is not None and tele.get("body") != "winch"):
+                return 409, {"ok": False, "error": "当前不是 winch，rover 只读"}
+            if command.kind == "preset" and tele and tele.get("ball"):
+                name = payload.get("name")
+                if name in ("up", "down"):
+                    z = float(tele["ball"][2])
+                    nz = z + (120.0 if name == "up" else -120.0)
+                    if not 900.0 <= nz <= 1500.0:
+                        return 409, {"ok": False, "error": "高度会超出 900–1500"}
+            if command.kind == "jog" and tele and tele.get("ball"):
+                v = payload.get("v") or [0, 0, 0]
+                if isinstance(v, (list, tuple)) and len(v) == 3:
+                    z = float(tele["ball"][2])
+                    vz = float(v[2])
+                    if (z >= 1500.0 and vz > 0) or (z <= 900.0 and vz < 0):
+                        return 409, {"ok": False, "error": "高度已到边界"}
             try:
                 status = self.arbiter.submit(command)
-            except (commands.BadCommand, ValueError) as e:
+            except (commands.BadCommand, ValueError, TypeError) as e:
                 return 400, {"ok": False, "error": str(e)}
 
             entry = {"t": self.now()}
@@ -83,6 +112,9 @@ class App:
 
     def accept(self, sid):
         with self.lock:
+            tele = self.link.latest()
+            if tele is not None and tele.get("body") != "winch":
+                return 409, {"ok": False, "error": "当前不是 winch，rover 只读"}
             try:
                 command = self.arbiter.accept(sid)
             except KeyError:
@@ -104,6 +136,8 @@ class App:
             return 204, {"ok": True}
 
     def settings(self, prediction_auto):
+        if not isinstance(prediction_auto, bool):
+            return 400, {"ok": False, "error": "prediction_auto 必须是布尔值"}
         with self.lock:
             self.arbiter.set_prediction_auto(prediction_auto)
             return 200, {"ok": True,
@@ -218,7 +252,12 @@ def main(argv=None):
         predictor = Predictor(app.submit_command, link.latest)
         threading.Thread(target=predictor.run, args=(stop,), daemon=True).start()
 
-    server = create_server(cfg.HOST, args.port, app)
+    try:
+        server = create_server(cfg.HOST, args.port, app)
+    except OSError as e:
+        print("station: HTTP 端口 %d 打不开：%s" % (args.port, e))
+        link.stop()
+        return 2
     print("CoreBall station: http://%s:%d/" % (cfg.HOST, args.port))
     print("UDP 4590 发送 / 4591 接收；不要同时开 control_server.py")
     try:

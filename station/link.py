@@ -23,6 +23,8 @@ class Link:
         self._at = None
 
     def start(self):
+        if self._tele is not None:
+            return
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             sock.bind(self.telemetry_addr)
@@ -33,13 +35,14 @@ class Link:
                 % self.telemetry_addr[1]) from e
         self._tele = sock
         self._running = True
-        self._thread = threading.Thread(target=self._recv_loop, daemon=True)
+        self._thread = threading.Thread(target=self._recv_loop, args=(sock,),
+                                        daemon=True)
         self._thread.start()
 
-    def _recv_loop(self):
+    def _recv_loop(self, sock):
         while self._running:
             try:
-                raw, _ = self._tele.recvfrom(8192)
+                raw, _ = sock.recvfrom(8192)
             except OSError:
                 break
             self.put_telemetry(raw)
@@ -53,6 +56,15 @@ class Link:
                 sock.close()
             except OSError:
                 pass
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+            self._thread = None
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+            self._sock = None
 
     def send(self, intent):
         if self._sock is None:
@@ -95,4 +107,4 @@ class Link:
 
     def connected(self, max_age=1.0):
         age = self.age_ms()
-        return age is not None and age <= max_age * 1000.0
+        return age is not None and age < max_age * 1000.0

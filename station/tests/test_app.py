@@ -8,6 +8,7 @@ from pathlib import Path
 
 from station.app import App, create_server
 from station.history import History
+from station.predictor import Predictor
 
 
 class FakeLink:
@@ -60,6 +61,7 @@ class AppTest(unittest.TestCase):
         self.assertEqual(body["status"], "accepted")
         self.assertEqual(self.link.sent[0]["intent"], "goto")
         self.assertEqual(self.link.sent[0]["point"][2], 1500.0)
+        self.assertEqual(body["command"]["requested"]["point"][2], 2000.0)
 
     def test_manual_voice_is_suggested(self):
         st, body = req(self.base + "/api/command",
@@ -95,6 +97,63 @@ class AppTest(unittest.TestCase):
         self.assertEqual(req(self.base + "/api/command",
                              {"source": "nope", "kind": "goto",
                               "payload": {"point": [0, 0, 1300]}})[0], 409)
+
+    def test_rover_blocks_motion(self):
+        self.link.snap = {"body": "rover", "ball": [-380, 520, 1300]}
+        st, body = req(self.base + "/api/command",
+                       {"source": "manual", "kind": "goto",
+                        "payload": {"point": [0, 500, 1300]}})
+        self.assertEqual(st, 409)
+        self.assertIn("rover", body["error"])
+        st, _ = req(self.base + "/api/command",
+                    {"source": "voice", "kind": "goto",
+                     "payload": {"point": [0, 500, 1300]}})
+        self.assertEqual(st, 409)
+        self.assertEqual(self.link.sent, [])
+
+    def test_preset_height_guard(self):
+        self.link.snap = {"body": "winch", "ball": [-380, 520, 1450]}
+        st, body = req(self.base + "/api/command",
+                       {"source": "manual", "kind": "preset",
+                        "payload": {"name": "up"}})
+        self.assertEqual(st, 409)
+        self.assertIn("900", body["error"])
+        self.assertEqual(self.link.sent, [])
+
+    def test_prediction_auto_sends(self):
+        self.app.now = lambda: 1000.0
+        self.app.arbiter.now = lambda: 1000.0
+        self.app.set_mode("auto")
+        self.app.settings(True)
+        self.link.snap = {"body": "winch", "ball": [-380, 520, 1300]}
+        p = Predictor(self.app.submit_command, lambda: self.link.snap,
+                      now=lambda: 1000.0)
+        p.tick(1000.0)
+        self.assertEqual(self.link.sent[-1]["src"], "station/prediction")
+        self.assertEqual(self.link.sent[-1]["point"], [-180.0, 520.0, 1300.0])
+
+    def test_low_confidence_is_suggested(self):
+        self.app.now = lambda: 1000.0
+        self.app.arbiter.now = lambda: 1000.0
+        self.app.set_mode("auto")
+        self.app.settings(True)
+        st, body = self.app.submit("prediction", "goto",
+                                   {"point": [0, 520, 1300]}, confidence=0.6)
+        self.assertEqual(st, 200)
+        self.assertEqual(body["status"], "suggested")
+        self.assertEqual(self.link.sent, [])
+
+    def test_type_errors(self):
+        self.assertEqual(req(self.base + "/api/command",
+                             {"source": "manual", "kind": "goto",
+                              "payload": {"point": [0, 0, 1300]},
+                              "confidence": "abc"})[0], 400)
+        self.assertEqual(req(self.base + "/api/command",
+                             {"source": "manual", "kind": "goto",
+                              "payload": {"point": [0, 0, 1300]},
+                              "ttl_s": "abc"})[0], 400)
+        self.assertEqual(req(self.base + "/api/settings",
+                             {"prediction_auto": "false"})[0], 400)
 
     def test_shared_and_index(self):
         with urllib.request.urlopen(self.base + "/shared/params.json", timeout=3) as r:
