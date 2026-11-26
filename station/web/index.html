@@ -12,7 +12,7 @@
   }
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--ink);
+  body{margin:0;background:var(--bg);color:var(--ink);overflow-x:hidden;
     font:14px/1.5 "Segoe UI","Microsoft YaHei",sans-serif}
   header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
     padding:10px 14px;border-bottom:1px solid var(--line)}
@@ -193,6 +193,7 @@ const FALLBACK_ANCHORS = [
 let anchors = FALLBACK_ANCHORS;
 let state = {mode:"manual", suggestions:[], link:{}, telemetry:null, prediction_auto:false};
 let target = {x:-380, y:520, z:1300};
+let lastActiveId = null;
 let toastTimer = null;
 
 function toast(text){
@@ -234,6 +235,15 @@ function postTelemetry(){
 
 function render(){
   const t = state.telemetry;
+  const active = state.active;
+  if(active && active.id !== lastActiveId){
+    lastActiveId = active.id;
+    const p = active.payload && active.payload.point;
+    if(Array.isArray(p) && p.length === 3){
+      target = {x:p[0], y:p[1], z:p[2]};
+      syncTargetInputs();
+    }
+  }
   const connected = !!state.link.connected;
   $("conn").textContent = connected ? "在线" : "遥测离线";
   $("conn").className = "badge " + (connected ? "ok" : "bad");
