@@ -70,6 +70,8 @@ class ArbiterTest(unittest.TestCase):
         with self.assertRaises(C.BadCommand):
             self.a.submit(cmd(source="voice", kind="jog",
                               payload={"v": [10, 0, 0]}))
+        with self.assertRaises(C.BadCommand):
+            self.a.submit(C.Command("manual", "goto", []))
 
     def test_ttl_expired(self):
         old = cmd()

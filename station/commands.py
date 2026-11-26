@@ -83,6 +83,8 @@ class Arbiter:
             raise BadCommand("未知 source: %s" % command.source)
         if command.kind not in KINDS:
             raise BadCommand("未知 kind: %s" % command.kind)
+        if not isinstance(command.payload, dict):
+            raise BadCommand("payload 必须是对象")
         if command.kind == "stop":
             return
         if command.kind == "goto":

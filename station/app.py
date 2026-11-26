@@ -26,6 +26,7 @@ class App:
     def __init__(self, config=None, link=None, history=None, now=time.time):
         self.cfg = config or cfg
         self.now = now
+        self.lock = threading.RLock()
         self.arbiter = commands.Arbiter(now=now)
         self.link = link if link is not None else Link()
         self.history = history or History(DATA / "history.jsonl")
@@ -46,21 +47,23 @@ class App:
         return self.submit_command(command)
 
     def submit_command(self, command):
-        try:
-            status = self.arbiter.submit(command)
-        except (commands.BadCommand, ValueError) as e:
-            return 400, {"ok": False, "error": str(e)}
+        with self.lock:
+            try:
+                status = self.arbiter.submit(command)
+            except (commands.BadCommand, ValueError) as e:
+                return 400, {"ok": False, "error": str(e)}
 
-        entry = {"t": self.now()}
-        entry.update(command.to_dict())
-        self.history.append(entry)
-        if status == "accepted":
-            self.link.send(commands.to_intent(command))
-        return 200, {"ok": True, "status": status, "id": command.id,
-                     "command": command.to_dict()}
+            entry = {"t": self.now()}
+            entry.update(command.to_dict())
+            self.history.append(entry)
+            if status == "accepted":
+                self.link.send(commands.to_intent(command))
+            return 200, {"ok": True, "status": status, "id": command.id,
+                         "command": command.to_dict()}
 
     def state(self):
-        out = self.arbiter.status()
+        with self.lock:
+            out = self.arbiter.status()
         latest = self.link.latest()
         out["link"] = {
             "connected": bool(latest and not latest.get("stale")),
@@ -71,36 +74,40 @@ class App:
 
     # ---------------- 模式/建议 ----------------
     def set_mode(self, mode):
-        try:
-            self.arbiter.set_mode(mode)
-        except commands.BadCommand as e:
-            return 400, {"ok": False, "error": str(e)}
-        return 200, {"ok": True, "mode": mode}
+        with self.lock:
+            try:
+                self.arbiter.set_mode(mode)
+            except commands.BadCommand as e:
+                return 400, {"ok": False, "error": str(e)}
+            return 200, {"ok": True, "mode": mode}
 
     def accept(self, sid):
-        try:
-            command = self.arbiter.accept(sid)
-        except KeyError:
-            return 404, {"ok": False, "error": "没有这条建议"}
-        if command is None:
-            return 409, {"ok": False, "error": "建议已过期或不可执行"}
-        self.link.send(commands.to_intent(command))
-        entry = {"t": self.now()}
-        entry.update(command.to_dict())
-        self.history.append(entry)
-        return 200, {"ok": True, "command": command.to_dict()}
+        with self.lock:
+            try:
+                command = self.arbiter.accept(sid)
+            except KeyError:
+                return 404, {"ok": False, "error": "没有这条建议"}
+            if command is None:
+                return 409, {"ok": False, "error": "建议已过期或不可执行"}
+            self.link.send(commands.to_intent(command))
+            entry = {"t": self.now()}
+            entry.update(command.to_dict())
+            self.history.append(entry)
+            return 200, {"ok": True, "command": command.to_dict()}
 
     def reject(self, sid):
-        try:
-            self.arbiter.reject(sid)
-        except KeyError:
-            return 404, {"ok": False, "error": "没有这条建议"}
-        return 204, {"ok": True}
+        with self.lock:
+            try:
+                self.arbiter.reject(sid)
+            except KeyError:
+                return 404, {"ok": False, "error": "没有这条建议"}
+            return 204, {"ok": True}
 
     def settings(self, prediction_auto):
-        self.arbiter.set_prediction_auto(prediction_auto)
-        return 200, {"ok": True,
-                     "prediction_auto": self.arbiter.prediction_auto}
+        with self.lock:
+            self.arbiter.set_prediction_auto(prediction_auto)
+            return 200, {"ok": True,
+                         "prediction_auto": self.arbiter.prediction_auto}
 
     def recent_history(self, n=50):
         return self.history.recent(n)
@@ -185,7 +192,7 @@ class Handler(SimpleHTTPRequestHandler):
         self._send(status, payload)
 
     def log_message(self, fmt, *args):
-        print("[station] " + fmt % args)
+        pass  # 本地工具：不刷访问日志
 
 
 def create_server(host, port, app):
