@@ -155,6 +155,25 @@ class Plant:
     def step(self, currents=None, dt=None):
         dt = float(self.p["dt"] if dt is None else dt)
 
+        cmd = np.zeros(8) if currents is None else np.asarray(currents, dtype=float)
+        cmd = np.clip(cmd, -self.p["i_max"], self.p["i_max"])
+        alpha = min(1.0, dt / max(self.p["current_tau"], EPS))
+        self.current += (cmd - self.current) * alpha
+
+        # 卷筒：先算旧张力，更新卷筒和放线长度
+        t_old = self.tensions()
+        tau_m = np.clip(self.p["kt"] * self.current,
+                        -self.p["tau_hold"], self.p["tau_hold"])
+        tau_f = self.p["fric_c"] * np.tanh(self.theta_dot / 1e-4)
+        theta_ddot = (tau_m - self.p["drum_r"] * t_old
+                      - self.p["fric_b"] * self.theta_dot - tau_f) / self.p["drum_j"]
+        self.theta_dot += theta_ddot * dt
+        vmax = self.p["v_line_max"] / self.p["drum_r"]
+        self.theta_dot = np.clip(self.theta_dot, -vmax, vmax)
+        self.theta += self.theta_dot * dt
+        self.L0 = self.L0_init - self.p["drum_r"] * self.theta
+
+        # 刚体：用更新后的绳长算力
         p = self.attachment_points()
         d = self.anchors - p
         length = np.linalg.norm(d, axis=1)
@@ -172,7 +191,7 @@ class Plant:
         self.v += (force / self.m) * dt
         self.r += self.v * dt
 
-        alpha = (tau - np.cross(self.w, self.inertia * self.w)) / self.inertia
-        self.w += alpha * dt
+        alpha_w = (tau - np.cross(self.w, self.inertia * self.w)) / self.inertia
+        self.w += alpha_w * dt
         qdot = 0.5 * quat_mul(self.q, np.array([0.0, *self.w]))
         self.q = quat_normalize(self.q + qdot * dt)

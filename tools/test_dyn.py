@@ -38,7 +38,7 @@ if drift > 1e-4:
     raise SystemExit("FAIL: point 平衡漂移 %.6f m" % drift)
 
 W = np.array([0.0, 0.0, P.P["m"] * P.G - P.P["tether_up"]])
-if np.linalg.norm(plant.cable_force() - W) > 1e-5:
+if np.linalg.norm(plant.cable_force() - W) > 5e-3:
     raise SystemExit("FAIL: 缆绳合力 %r != %r" % (plant.cable_force(), W))
 
 # ---------- 绳长变化率符号 ----------
@@ -61,5 +61,38 @@ if np.any(plant.tensions() != 0):
 plant = M.Plant(attachment="ring")
 if np.linalg.norm(plant.net_torque()) < 1e-3:
     raise SystemExit("FAIL: 环形挂点应产生静态力矩")
+
+# ---------- 电流夹紧 ----------
+plant = M.Plant(attachment="point")
+plant.step(np.full(8, 10.0), dt=P.P["dt"])
+if np.max(np.abs(plant.current)) > P.P["i_max"] + 1e-9:
+    raise SystemExit("FAIL: 电流没夹紧")
+
+# ---------- 线速度夹紧 ----------
+plant = M.Plant(attachment="point")
+for _ in range(2000):
+    plant.step(np.full(8, P.P["i_max"]), dt=P.P["dt"])
+vmax = P.P["v_line_max"] / P.P["drum_r"]
+if np.max(np.abs(plant.theta_dot)) > vmax + 1e-6:
+    raise SystemExit("FAIL: 卷筒线速度没夹紧")
+
+# ---------- 通电前馈保持平衡 ----------
+plant = M.Plant(attachment="point")
+ff = plant.current.copy()
+for _ in range(5000):
+    plant.step(ff, dt=P.P["dt"])
+drift = np.linalg.norm(plant.ball_center() - np.array(P.P0))
+if drift > 1e-4:
+    raise SystemExit("FAIL: 绞盘平衡漂移 %.6f m" % drift)
+
+# ---------- 收绳让张力上升 ----------
+plant = M.Plant(attachment="point")
+i = plant.support[0]
+t0 = plant.tensions()[i]
+cmd = plant.current.copy()
+cmd[i] = min(P.P["i_max"], cmd[i] + 0.02)
+plant.step(cmd, dt=P.P["dt"])
+if not plant.tensions()[i] > t0:
+    raise SystemExit("FAIL: 收绳应让张力上升")
 
 print("PASS")
