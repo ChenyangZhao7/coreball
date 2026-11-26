@@ -418,6 +418,8 @@ git commit -m "feat: add dynamic trajectory and position control"
 
 ### Task 5: 支撑监督与 300 ms 交叉
 
+> **2026-11-26 执行 ruling**：三个验收点 P0/P1/P2 在固定 P0 支撑下都闭合（余量 1.8–2.3 N），v1 默认不切换；运动中切换实测有 200–300 mm 瞬态。下面的「三点短跑必须切一次」已改为「固定支撑不应切换」，另有一个 `switching=True` 的实验路径只验证会触发，不代表可安全启用。
+
 **Files:**
 - Modify: `tools/dyn_control.py`
 - Modify: `tools/test_dyn.py`
