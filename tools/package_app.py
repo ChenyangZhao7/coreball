@@ -108,7 +108,7 @@ pause
 
 UNINSTALL = r"""@echo off
 chcp 65001 >nul
-call "%~dp0停止CoreBall.bat" >nul 2>&1
+call "%~dp0Stop-CoreBall.bat" >nul 2>&1
 del "%USERPROFILE%\Desktop\CoreBall 操作台.lnk" >nul 2>&1
 rmdir /s /q "%APPDATA%\Microsoft\Windows\Start Menu\Programs\CoreBall" >nul 2>&1
 set "ROOT=%LOCALAPPDATA%\CoreBall"
@@ -130,10 +130,10 @@ README = """CoreBall 独立版
   - 顶栏「摄像头」开关可以关闭/打开摄像头。
   - 3D 工位 / 2D 地图 / 实时画面 在左上角切换。
   - 关闭 CoreBall 启动窗口会停止 Blender、控制桥和摄像头。
-  - 也可以用 停止CoreBall.bat 一键停止。
+  - 也可以用 Stop-CoreBall.bat 一键停止。
 
 卸载
-  双击 卸载CoreBall.bat，或删除 %LOCALAPPDATA%\\CoreBall。
+  双击 Uninstall-CoreBall.bat，或删除 %LOCALAPPDATA%\\CoreBall。
 
 端口
   8010 控制桥，8765 摄像头，4590/4591 Blender 指令/遥测；都只监听本机。
@@ -147,9 +147,9 @@ README = """CoreBall 独立版
 
 def build_scripts():
     write_bat(OUT / "Install-CoreBall.bat", INSTALL)
-    write_bat(OUT / "停止CoreBall.bat", STOP)
-    write_bat(OUT / "卸载CoreBall.bat", UNINSTALL)
-    (OUT / "使用说明.txt").write_text(README.replace("\n", "\r\n"), encoding="utf-8")
+    write_bat(OUT / "Stop-CoreBall.bat", STOP)
+    write_bat(OUT / "Uninstall-CoreBall.bat", UNINSTALL)
+    (OUT / "README.txt").write_text(README.replace("\n", "\r\n"), encoding="utf-8")
 
 
 def main():
@@ -163,5 +163,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
