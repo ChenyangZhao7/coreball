@@ -23,7 +23,7 @@ if errorlevel 1 start "" /min cmd /c ".venv\Scripts\python.exe tools\control_ser
 
 echo 启动摄像头...
 netstat -ano | findstr ":8765" | findstr LISTENING >nul
-if errorlevel 1 start "" /min cmd /c ".venv\Scripts\python.exe tools\camera_web.py"
+if errorlevel 1 start "" /min cmd /c ".venv\Scripts\python.exe tools\camera_web.py --raw"
 
 echo 等待控制桥...
 set /a tries=0
@@ -39,7 +39,7 @@ goto wait
 set "BROWSER=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
 if not exist "%BROWSER%" set "BROWSER=%ProgramFiles%\Google\Chrome\Application\chrome.exe"
 if not exist "%BROWSER%" set "BROWSER=msedge.exe"
-start "" "%BROWSER%" --app=http://127.0.0.1:8010/?view=camera --window-size=1600,1000
+start "" "%BROWSER%" --app=http://127.0.0.1:8010/?view=camera --window-size=1600,1000 --start-maximized
 
 echo.
 echo 操作台窗口：左边实时画面，右边操作。

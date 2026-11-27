@@ -76,6 +76,24 @@
     padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer;
   }
   .viewtabs button.on { background: #1b2733; color: var(--ink); }
+
+  .camswitch {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted); cursor: pointer; user-select: none;
+  }
+  .camswitch input { position: absolute; width: 0; height: 0; opacity: 0; }
+  .camswitch .track {
+    width: 34px; height: 18px; border-radius: 999px;
+    background: #26313c; border: 1px solid #31465a;
+    position: relative; transition: background .15s, border-color .15s;
+  }
+  .camswitch .thumb {
+    position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+    border-radius: 50%; background: #8b949e; transition: left .15s, background .15s;
+  }
+  .camswitch input:checked + .track { background: #12351f; border-color: #2a6b3a; }
+  .camswitch input:checked + .track .thumb { left: 18px; background: var(--ok); }
+  .camswitch input:focus-visible + .track { outline: 2px solid var(--blue); outline-offset: 2px; }
   .spacer { flex: 1; }
 
   .btn {
@@ -120,6 +138,7 @@
     object-fit: contain; background: #000; display: none;
   }
   .stage.view-camera .cam { display: block; }
+  .stage.cam-off .cam { display: none; }
   .stage.view-camera canvas, .stage.view-camera iframe { display: none; }
   .stage.view-camera .hud .viewhint2d,
   .stage.view-camera .hud .viewhint3d { display: none; }
@@ -423,6 +442,11 @@
     <button id="tab3d" class="on" data-view="3d">3D 工位</button>
     <button id="tab2d" data-view="2d">2D 地图</button>
   </div>
+  <label class="camswitch" title="摄像头开关">
+    <input id="camToggle" type="checkbox" checked aria-label="摄像头开关">
+    <span class="track"><span class="thumb"></span></span>
+    <span class="camlabel">摄像头</span>
+  </label>
   <span class="spacer"></span>
   <button id="helpBtn" class="iconbtn" title="快捷键与帮助" aria-label="帮助">?</button>
   <button id="demoBtn" class="btn ghost">演示模式</button>
@@ -436,11 +460,16 @@
     <img id="cam" class="cam" alt="实时摄像头">
     <div id="camNote" class="camnote" hidden>
       <b>摄像头没有画面</b>
-      <span>先双击 <code>web\操作台窗口.bat</code>，或运行 <code>python tools\camera_web.py</code>。</span>
+      <span>先双击 <code>web\操作台窗口.bat</code>，或运行 <code>python tools\camera_web.py --raw</code>。</span>
       <div class="row">
         <button id="camRetry" class="btn">重试</button>
         <button id="camTo3d" class="btn ghost">切到 3D 工位</button>
       </div>
+    </div>
+    <div id="camOff" class="camnote" hidden>
+      <b>摄像头已关闭</b>
+      <span>打开右上角「摄像头」开关后才会读取画面。</span>
+      <div class="row"><button id="camOnBtn" class="btn primary">打开摄像头</button></div>
     </div>
 
     <div class="hud">
@@ -673,6 +702,10 @@ const demoRibbon = $('demoRibbon');
 const targetTip = $('targetTip');
 const cam = $('cam');
 const camNote = $('camNote');
+const camOff = $('camOff');
+const camToggle = $('camToggle');
+let cameraOn = true;
+try { cameraOn = localStorage.getItem('coreball.camera') !== 'off'; } catch (_) {}
 const toastEl = $('toast');
 const helpDlg = $('helpDlg');
 const logEl = $('log');
@@ -783,18 +816,40 @@ function setControlsEnabled(on) {
 let camTimer = null;
 let camRetryTimer = null;
 
+function setCamera(on, persist = true) {
+  cameraOn = !!on;
+  camToggle.checked = cameraOn;
+  stage.classList.toggle('cam-off', !cameraOn);
+  if (persist) {
+    try { localStorage.setItem('coreball.camera', cameraOn ? 'on' : 'off'); } catch (_) {}
+  }
+  fetch('http://127.0.0.1:8765/control?on=' + (cameraOn ? '1' : '0'),
+        { mode: 'no-cors' }).catch(() => {});
+  if (!cameraOn) {
+    cam.src = '';
+    camNote.hidden = true;
+    camOff.hidden = state.view !== 'camera';
+    clearTimeout(camTimer);
+    clearTimeout(camRetryTimer);
+  } else {
+    camOff.hidden = true;
+    if (state.view === 'camera') camStart();
+  }
+}
+
 function camStart() {
-  if (state.view !== 'camera') return;
+  if (!cameraOn || state.view !== 'camera') return;
+  camOff.hidden = true;
   camNote.hidden = true;
   cam.src = 'http://127.0.0.1:8765/stream?t=' + Date.now();
   clearTimeout(camTimer);
   camTimer = setTimeout(() => {
-    if (state.view === 'camera' && !(cam.naturalWidth > 0)) camFailed();
+    if (state.view === 'camera' && cameraOn && !(cam.naturalWidth > 0)) camFailed();
   }, 2500);
 }
 
 function camFailed() {
-  if (state.view !== 'camera') return;
+  if (!cameraOn || state.view !== 'camera') return;
   camNote.hidden = false;
   clearTimeout(camRetryTimer);
   camRetryTimer = setTimeout(camStart, 4000);
@@ -804,6 +859,8 @@ cam.addEventListener('load', () => { camNote.hidden = true; });
 cam.addEventListener('error', camFailed);
 $('camRetry').addEventListener('click', camStart);
 $('camTo3d').addEventListener('click', () => setView('3d'));
+$('camOnBtn').addEventListener('click', () => setCamera(true));
+camToggle.addEventListener('change', () => setCamera(camToggle.checked));
 
 function refreshOnboarding() {
   onboarding.hidden = state.view === 'camera' || state.mode === 'live'
@@ -819,8 +876,14 @@ function setView(view) {
   $('tab3d').classList.toggle('on', view === '3d');
   $('tab2d').classList.toggle('on', view === '2d');
   targetTip.hidden = view !== '2d';
-  if (view === 'camera') camStart();
-  else { clearTimeout(camTimer); clearTimeout(camRetryTimer); }
+  camOff.hidden = view !== 'camera' || cameraOn;
+  if (view === 'camera') {
+    if (cameraOn) camStart();
+    else { camNote.hidden = true; camOff.hidden = false; }
+  } else {
+    clearTimeout(camTimer);
+    clearTimeout(camRetryTimer);
+  }
   refreshOnboarding();
   if (view === '2d') { fit(); paint(); }
 }
@@ -1454,6 +1517,7 @@ if (location.protocol === 'file:') {
   $('onboardNote').textContent = '当前是直接打开的本地文件：请双击 web\\control.bat 启动控制桥，再从这里操作。';
 }
 setControlsEnabled(false);
+setCamera(cameraOn, false);
 const startView = new URLSearchParams(location.search).get('view');
 setView(startView === 'camera' || startView === '2d' ? startView : '3d');
 fetch('params.json', { cache: 'no-store' })

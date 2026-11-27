@@ -127,7 +127,8 @@ The online Wokwi version is in `wokwi\README.md`: one ESP32 and two crossed UART
 
 Double-click `web\操作台窗口.bat` (recommended): it starts Blender's command scene, the local bridge and the camera, then opens a single Edge/Chrome app window — **live camera on the left, console on the right**. To open only the page, use `web\操作台.bat` or `web\control.bat`.
 
-- Left tabs: **live camera** (USB camera + hand skeleton) / **3D rig** / **2D map**;
+- Left tabs: **live camera** (USB camera) / **3D rig** / **2D map**;
+- The **camera switch** in the header turns the feed off at any time; switching off releases the camera so the service no longer holds the device;
 - The first screen is a three-step guide. If Blender is not running, click "先看演示" to explore a simulated ball; it never commands real hardware;
 - **Quick actions**: come / back / look / stop;
 - **Manual**: hold the on-screen arrows or W/A/S/D, Q/E for height, release to stop; click the floor to go to a point; Space stops;
