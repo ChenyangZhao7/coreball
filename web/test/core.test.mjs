@@ -32,6 +32,14 @@ test('球心夹在三面围板内', () => {
   assert.deepEqual(C.pushOutOfNeck([-900, 500, 1300]).slice(0, 2), [-775, 500]);
 });
 
+test('球心不进入人的圆柱体（r210 + 球半径 40）', () => {
+  for (const p of [[0, 890, 1300], [100, 800, 1300], [-80, 950, 1300]]) {
+    const q = C.pushOutOfNeck(p);
+    const d = Math.hypot(q[0] - C.NECK.x, q[1] - C.NECK.y);
+    assert.ok(d >= C.NECK.r + C.BOOTH.r - 1e-9, `d=${d}`);
+  }
+});
+
 test('8 绳自动选 4 根支撑', () => {
   const r = C.selectSupport([-380, 520, 1300]);
   assert.equal(r.support.length, 4);

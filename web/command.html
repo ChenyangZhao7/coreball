@@ -254,11 +254,12 @@ function clampBooth(p) {
 
 function pushOutOfNeck(p) {
   p = clampBooth(p);
+  const clear = NECK.r + BOOTH.r;   // 球面不能进入 r210 圆柱
   const dx = p[0] - NECK.x, dy = p[1] - NECK.y;
   const r = Math.hypot(dx, dy);
-  if (r >= NECK.r) return p;
-  if (r < 1e-6) return clampBooth([NECK.x + NECK.r, NECK.y, p[2]]);
-  const k = NECK.r / r;
+  if (r >= clear) return p;
+  if (r < 1e-6) return clampBooth([NECK.x + clear, NECK.y, p[2]]);
+  const k = clear / r;
   return clampBooth([NECK.x + dx * k, NECK.y + dy * k, p[2]]);
 }
 
@@ -664,7 +665,7 @@ cv.addEventListener('pointermove', e => {
   if (dragGhost) {
     const z = state.ghost[2];
     const hit = planeHit(rayFromScreen(x, y, cam, W, H), z);
-    state.ghostBlocked = !!hit && Math.hypot(hit[0] - NECK.x, hit[1] - NECK.y) < NECK.r;
+    state.ghostBlocked = !!hit && Math.hypot(hit[0] - NECK.x, hit[1] - NECK.y) < NECK.r + BOOTH.r;
     state.ghost = dragTarget(cam, x, y, z, state.ghost, W, H);
   } else if (orbit) {
     if (dragButton === 2) {
@@ -732,7 +733,7 @@ window.addEventListener('keydown', e => {
   else return;
 
   e.preventDefault();
-  const inside = Math.hypot(g[0] - NECK.x, g[1] - NECK.y) < NECK.r;
+  const inside = Math.hypot(g[0] - NECK.x, g[1] - NECK.y) < NECK.r + BOOTH.r;
   state.ghost = pushOutOfNeck(g);
   state.ghostBlocked = inside;
   syncGhostHeight();

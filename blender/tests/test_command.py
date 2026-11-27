@@ -113,8 +113,8 @@ if "安全层否决" not in blocked_lines:
 from cmd_runtime import clamp_ball
 
 a = clamp_ball((0.0, 890.0, 1300.0))
-if abs((a[0] ** 2 + (a[1] - 890.0) ** 2) ** 0.5 - 210.0) > 1e-6:
-    fail("轴线没推到 210")
+if abs((a[0] ** 2 + (a[1] - 890.0) ** 2) ** 0.5 - 250.0) > 1e-6:
+    fail("轴线没推到 250（r210 圆柱 + 球半径 40）")
 if a[2] != 1300.0:
     fail("回弹改了高度")
 
@@ -124,7 +124,7 @@ if b != (-380.0, 520.0, 1300.0):
 
 # Blender 坐标是 float32：轴线上的点会带 ~1e-5 mm 噪声，方向必须仍是 +X
 a2 = clamp_ball((0.0, 889.9999857, 1300.0))
-if abs(a2[0] - 210.0) > 1e-3 or abs(a2[1] - 890.0) > 1e-3:
+if abs(a2[0] - 250.0) > 1e-3 or abs(a2[1] - 890.0) > 1e-3:
     fail("轴线回弹方向错了：%s" % (a2,))
 
 
@@ -135,7 +135,7 @@ bpy.context.view_layer.update()
 R._last = 0.0
 R._tick()
 p = bpy.data.objects["CMD_TARGET"].location
-if abs(p.x * 1000.0 - 210.0) > 0.5 or abs(p.y * 1000.0 - 890.0) > 0.5:
+if abs(p.x * 1000.0 - 250.0) > 0.5 or abs(p.y * 1000.0 - 890.0) > 0.5:
     fail("handler 回弹方向错了：%s" % (tuple(p),))
 if R.STATE["hub_mm"] is None or R.STATE["res"] is None:
     fail("handler 没算出面板状态")

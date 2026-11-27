@@ -604,6 +604,7 @@ const PARAMS = {
   anchors: null,   // null → app 用内置 FALLBACK_ANCHORS
   tMin: 0.30,
   neck: { x: 0, y: 890, r: 210 },
+  ballR: 40,
   floor: { x: 775, y0: 250, y1: 1055 },
 };
 
@@ -613,7 +614,8 @@ function applyParams(p) {
   if (p.t_min > 0) PARAMS.tMin = Number(p.t_min);
   if (p.neck) Object.assign(PARAMS.neck, p.neck);
   if (p.booth) {
-    const m = (p.booth.ball_r || 40) + (p.booth.gap || 5);
+    PARAMS.ballR = Number(p.booth.ball_r || 40);
+    const m = PARAMS.ballR + (p.booth.gap || 5);
     PARAMS.floor = {
       x: (p.booth.hx || 820) - m,
       y0: Math.max(p.booth.y0p || 250, (p.booth.y0 || 0) + m),
@@ -639,6 +641,19 @@ function jogVector(keys, speed) {
 function clampFloor(x, y) {
   return [Math.max(-PARAMS.floor.x, Math.min(PARAMS.floor.x, x)),
           Math.max(PARAMS.floor.y0, Math.min(PARAMS.floor.y1, y))];
+}
+
+// 球心硬约束：到脖子轴线 ≥ 圆柱半径 + 球半径（210 + 40 = 250）
+function clampPoint(x, y) {
+  const [cx, cy] = clampFloor(x, y);
+  const nx = PARAMS.neck.x, ny = PARAMS.neck.y;
+  const clear = PARAMS.neck.r + PARAMS.ballR;
+  const dx = cx - nx, dy = cy - ny;
+  const r = Math.hypot(dx, dy);
+  if (r >= clear) return [cx, cy];
+  if (r < 1e-6) return clampFloor(nx + clear, ny);
+  const k = clear / r;
+  return clampFloor(nx + dx * k, ny + dy * k);
 }
 
 function clampZ(z) {
@@ -667,14 +682,14 @@ function stepToward(pos, target, speed, dt) {
 }
 
 globalThis.ConsoleCore = {
-  KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, clampZ, controlVector, stepToward,
+  KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, clampPoint, clampZ, controlVector, stepToward,
   PARAMS, applyParams,
 };
 </script>
 
 <script>
 (() => {
-const { jogVector, clampFloor, clampZ, controlVector, stepToward, PARAMS } = ConsoleCore;
+const { jogVector, clampFloor, clampPoint, clampZ, controlVector, stepToward, PARAMS } = ConsoleCore;
 
 // ---------------- 常量 ----------------
 const NEAR = [-380, 520, 1300];
@@ -1190,7 +1205,7 @@ function demoIntent(msg) {
       state.target = null;
       break;
     case 'goto': {
-      const xy = clampFloor(msg.point[0], msg.point[1]);
+      const xy = clampPoint(msg.point[0], msg.point[1]);
       d.target = [xy[0], xy[1], clampZ(msg.point[2])];
       state.target = d.target.slice();
       break;
@@ -1199,7 +1214,7 @@ function demoIntent(msg) {
       const raw = [p[0] + Number(msg.v[0] || 0) * 0.4,
                    p[1] + Number(msg.v[1] || 0) * 0.4,
                    clampZ(p[2] + Number(msg.v[2] || 0) * 0.4)];
-      const xy = clampFloor(raw[0], raw[1]);
+      const xy = clampPoint(raw[0], raw[1]);
       d.target = [xy[0], xy[1], raw[2]];
       break;
     }
@@ -1220,6 +1235,8 @@ function demoIntent(msg) {
         d.yaw = Math.atan2(p[0], 890 - p[1]);
       }
       if (name !== 'look') d.expr = 'acting';
+      const xy = clampPoint(d.target[0], d.target[1]);
+      d.target = [xy[0], xy[1], d.target[2]];
       state.target = d.target.slice();
       break;
     }
@@ -1233,7 +1250,9 @@ function demoIntent(msg) {
 function demoTick() {
   if (state.mode !== 'demo') return;
   const d = state.demo;
-  d.pos = stepToward(d.pos, d.target, Math.max(240, state.speed), 0.05);
+  const next = stepToward(d.pos, d.target, Math.max(240, state.speed), 0.05);
+  const xy = clampPoint(next[0], next[1]);
+  d.pos = [xy[0], xy[1], next[2]];
   post3D(activeTele());
   render();
   if (state.view === '2d') paint();
@@ -1283,7 +1302,7 @@ async function sendIntent(msg, label, quiet = false) {
 }
 
 function sendGoto(p, label) {
-  const xy = clampFloor(p[0], p[1]);
+  const xy = clampPoint(p[0], p[1]);
   const q = [xy[0], xy[1], clampZ(p[2])];
   state.target = q.slice();
   sendIntent({ intent: 'goto', point: q }, label || ('前往 ' + fmtVec(q)));

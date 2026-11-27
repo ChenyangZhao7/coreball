@@ -15,7 +15,7 @@ test('拖进禁区会被推回边界', () => {
   const g = C.project([0, 890, 1300], cam, 1200, 800);
   const p = C.dragTarget(cam, g.x, g.y, 1300, [0, 890, 1300]);
   const r = Math.hypot(p[0], p[1] - 890);
-  assert.ok(r >= 210 - 1e-6 && r <= 210.01, `r=${r}`);
+  assert.ok(r >= 250 - 1e-6 && r <= 250.01, `r=${r}`);
 });
 
 test('初始状态在默认位', () => {

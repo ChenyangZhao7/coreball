@@ -204,7 +204,7 @@ Double-click `blender\指挥.bat`, then:
 | Current cable lengths | 1331 / 645 / 766 / 661 mm |
 | Slackest tension | 2.31 N (ample margin) |
 | Flyable zone | 100% of sampled workspace at the hub (practical zone 100%), ~0.6 m³ usable |
-| Keep-out zone | r210 hard / r305 soft, centred on the neck |
+| Keep-out zone | ball centre ≥250 hard (neck r210 + ball 40) / ≥305 soft |
 | Default pose | (−380, 520, 1300), 640 mm from the eyes, 30° off centre |
 
 ---

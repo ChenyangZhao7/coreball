@@ -43,6 +43,15 @@ test('地面夹在实用区内', () => {
   assert.deepEqual(C.clampFloor(0, 520), [0, 520]);
 });
 
+test('控制台球心也不进入人的圆柱体', () => {
+  for (const p of [[0, 890], [100, 800], [-80, 950]]) {
+    const q = C.clampPoint(p[0], p[1]);
+    const d = Math.hypot(q[0] - C.PARAMS.neck.x, q[1] - C.PARAMS.neck.y);
+    assert.ok(d >= C.PARAMS.neck.r + C.PARAMS.ballR - 1e-9, `d=${d}`);
+  }
+  assert.deepEqual(C.clampPoint(2000, -50), [775, 250]);
+});
+
 test('高度夹在 900–1500', () => {
   assert.equal(C.clampZ(0), 900);
   assert.equal(C.clampZ(2000), 1500);

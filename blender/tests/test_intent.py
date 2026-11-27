@@ -146,8 +146,13 @@ g = route_intent(A, {"intent": "goto", "point": [100, 300, 1200]}, pts, [0, 0, 0
 if g["kind"] != "move" or g["point"] != [100.0, 300.0, 1200.0]:
     fail("goto 没解析：%s" % (g,))
 g = route_intent(A, {"intent": "goto", "point": [0, 890, 1300]}, pts, [0, 0, 0])
-if abs(((g["point"][0] ** 2 + (g["point"][1] - 890.0) ** 2) ** 0.5) - 210.0) > 1e-3:
-    fail("goto 没被禁区夹紧")
+d = ((g["point"][0] ** 2 + (g["point"][1] - 890.0) ** 2) ** 0.5)
+if d < 250.0 - 1e-3:
+    fail("球心进了人的圆柱体：d=%.1f" % d)
+g = route_intent(A, {"intent": "goto", "point": [100, 800, 1300]}, pts, [0, 0, 0])
+d = ((g["point"][0] ** 2 + (g["point"][1] - 890.0) ** 2) ** 0.5)
+if d < 250.0 - 1e-3:
+    fail("斜向 goto 球心进了圆柱体：d=%.1f" % d)
 g = route_intent(A, {"intent": "goto", "point": [2000, 1200, 1300]}, pts, [0, 0, 0])
 if g["point"][:2] != [775.0, 1055.0]:
     fail("goto 没被墙夹紧：%s" % (g["point"],))

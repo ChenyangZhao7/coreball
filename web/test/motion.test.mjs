@@ -41,9 +41,9 @@ test('距离为 0 不除零', () => {
 test('禁区推离：内部、外部、轴线上', () => {
   assert.deepEqual(C.pushOutOfNeck([0, 600, 1200]), [0, 600, 1200]);
   const a = C.pushOutOfNeck([0, 700, 1200]);
-  assert.ok(Math.abs(Math.hypot(a[0], a[1] - 890) - 210) < 1e-6);
+  assert.ok(Math.abs(Math.hypot(a[0], a[1] - 890) - 250) < 1e-6);
   const b = C.pushOutOfNeck([0, 890, 1200]);
-  assert.ok(Math.abs(Math.hypot(b[0], b[1] - 890) - 210) < 1e-6);
+  assert.ok(Math.abs(Math.hypot(b[0], b[1] - 890) - 250) < 1e-6);
   assert.equal(b[2], 1200);
   assert.ok(b.every(Number.isFinite));
 });

@@ -34,6 +34,7 @@ BOOTH_HX = 820.0        # 左右墙 x = ±820
 BOOTH_Y0, BOOTH_Y1 = 0.0, 1100.0
 PRACTICAL_Y0 = 250.0    # 实用区：不进入后墙前 250 mm（锚点凸包外）
 BALL_R, WALL_GAP = 40.0, 5.0
+NECK_CLEAR = NECK_R + BALL_R   # 球心硬约束：球面不进入 r210 圆柱
 
 TELEMETRY_ADDR = ("127.0.0.1", 4591)
 JOG_TIMEOUT = 0.35      # 控制页每 50 ms 发一次；超过这个时间没包就停
@@ -391,18 +392,18 @@ def set_expression(name):
 
 
 def clamp_ball(p):
-    """先把球夹在三面墙内，再推出脖子圆柱。"""
+    """先把球夹在三面墙内，再推出脖子圆柱（球心留出球半径）。"""
     x, y, z = p
     x, y = _clamp_walls(x, y)
     dx, dy = x - NECK_X, y - NECK_Y
     r = (dx * dx + dy * dy) ** 0.5
-    if r < NECK_R:
+    if r < NECK_CLEAR:
         # Blender 坐标是 float32，轴线上的点带 ~1e-5 mm 噪声；
         # 阈值取得比噪声大，避免把噪声放大成错误方向。
         if r < 0.5:
-            x, y = NECK_X + NECK_R, NECK_Y
+            x, y = NECK_X + NECK_CLEAR, NECK_Y
         else:
-            k = NECK_R / r
+            k = NECK_CLEAR / r
             x, y = NECK_X + dx * k, NECK_Y + dy * k
     x, y = _clamp_walls(x, y)
     return (x, y, z)
