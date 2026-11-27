@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoreBall φ80 · 内部结构</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px; background: #0b0e12; color: #dfe7ef;
+         font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif; }
+  h1 { font-size: 19px; font-weight: 600; letter-spacing: .06em; margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; color: #7d8a99; font-size: 12.5px; }
+  .hero { margin: 0 0 16px; background: #12171d; border: 1px solid #1e2731;
+          border-radius: 12px; overflow: hidden; }
+  .hero img { display: block; width: 100%; height: auto; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+  figure { margin: 0; background: #12171d; border: 1px solid #1e2731;
+           border-radius: 10px; overflow: hidden; }
+  img { display: block; width: 100%; height: auto; }
+  figcaption { padding: 9px 12px; font-size: 12px; color: #9aa8b8; }
+  figcaption b { color: #dfe7ef; font-weight: 600; }
+  .note { color: #8b949e; font-size: 12.5px; line-height: 1.8; }
+  .note b { color: #cfdae6; }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } body { padding: 16px; } }
+</style>
+</head>
+<body>
+  <h1>CoreBall φ80 · 内部结构</h1>
+  <p class="sub">中剖 / 分层剖视 / 爆炸图 · 单位 mm · 6061 分型环 + 六柱 + 两只 φ30 井杯</p>
+
+  <figure class="hero">
+    <img src="preview_section.png" alt="中剖">
+    <figcaption><b>中剖</b> · 顶井法兰 / 中心立柱 / 主板 / 电池 / 底井法兰，外圈是 2 mm PC 壳</figcaption>
+  </figure>
+
+  <div class="grid">
+    <figure>
+      <img src="preview_section_top.png" alt="上层剖视">
+      <figcaption><b>上层</b> · 脸窗、麦克风、顶井、主板</figcaption>
+    </figure>
+    <figure>
+      <img src="preview_section_bottom.png" alt="下层剖视">
+      <figcaption><b>下层</b> · 电池、喇叭、底井</figcaption>
+    </figure>
+  </div>
+
+  <figure class="hero">
+    <img src="ball_explode.png" alt="爆炸图">
+    <figcaption><b>爆炸图</b> · 上壳 + 脸窗 + 灯带 + 麦克风 / 分型环 + 六柱 / 下壳 + 喇叭 + 底井</figcaption>
+  </figure>
+
+  <div class="note">
+    <b>结构口径</b>：6061 分型环（φ69 × 6）在 z = −12；三上柱、三下柱把顶杯/底杯的拉力和插拔力传到环；
+    电池在下壳，主板在上壳。<br>
+    <b>模型</b>：<code>blender/out/ball/coreball_ball.blend</code>；剖视/爆炸渲染同目录。
+  </div>
+</body>
+</html>
