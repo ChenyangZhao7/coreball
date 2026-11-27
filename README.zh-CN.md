@@ -42,8 +42,9 @@ docs/
 web/
   viewer.html             离线 WebGL 查看器（插头插拔动画 + 3D 球/工位）
   command.html            3D 指挥页
-  control.html            操作台（快速动作 + 手动 + 表情 + 2D/3D）
+  control.html            操作台（快速动作 + 手动 + 表情 + 实时画面/2D/3D）
   操作台.bat              一键启动 Blender + 控制桥 + 操作台
+  操作台窗口.bat          一键启动 + 单窗口（左摄像头 / 右操作）
 blender/
   build_ball.py           核心球 φ80
   build_hub.py            吊点总成（偏航 + 伸缩），可单独出图
@@ -128,8 +129,9 @@ python tools\sim_link.py
 
 ### 2D / 3D 操作台
 
-双击 `web\操作台.bat`（推荐）：会启动 Blender 指挥场景和控制桥，并打开 <http://127.0.0.1:8010/>。只想开页面时用 `web\control.bat`。
+双击 `web\操作台窗口.bat`（推荐）：会启动 Blender 指挥场景、控制桥和摄像头，并打开一个 Edge/Chrome 应用窗口——**左边实时画面，右边操作台**。只想开页面时用 `web\操作台.bat` 或 `web\control.bat`。
 
+- 左侧标签：**实时画面**（USB 摄像头 + 手势骨架）/ **3D 工位** / **2D 地图**；
 - 打开后先看到三步引导；没有实体 / 没开 Blender 时点「先看演示」，可以模拟球的移动，不会控制真机；
 - **快速动作**：过来 / 回去 / 看我 / 停住；
 - **手动移动**：按住屏幕方向键或 W/A/S/D，Q/E 升降，松开即停；点地面 = 定位；空格 = 停；

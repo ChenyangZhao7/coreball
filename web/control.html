@@ -115,10 +115,31 @@
     border: 0; display: block;
   }
   .stage canvas { display: none; touch-action: none; }
+  .stage .cam {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; background: #000; display: none;
+  }
+  .stage.view-camera .cam { display: block; }
+  .stage.view-camera canvas, .stage.view-camera iframe { display: none; }
+  .stage.view-camera .hud .viewhint2d,
+  .stage.view-camera .hud .viewhint3d { display: none; }
   .stage.view-2d canvas { display: block; }
   .stage.view-2d iframe,
   .stage.view-2d .hud .viewhint3d { display: none; }
   .stage.view-3d .hud .viewhint2d { display: none; }
+  .camnote {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(430px, calc(100% - 32px));
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 16px 18px; border-radius: 12px;
+    background: rgba(13, 19, 25, .94); border: 1px solid #31465a;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, .55);
+    text-align: center; z-index: 4;
+  }
+  .camnote[hidden] { display: none; }
+  .camnote b { font-size: 15px; }
+  .camnote span { color: var(--muted); font-size: 12.5px; }
+  .camnote .row { justify-content: center; margin-top: 4px; }
 
   .hud {
     position: absolute; left: 16px; top: 16px;
@@ -398,6 +419,7 @@
   <div class="brand"><span class="mark"></span><b>CoreBall</b><span class="sub">操作台</span></div>
   <div id="conn" class="conn"><i></i><span id="connText">连接中…</span></div>
   <div class="viewtabs" role="group" aria-label="视图切换">
+    <button id="tabCam" data-view="camera">实时画面</button>
     <button id="tab3d" class="on" data-view="3d">3D 工位</button>
     <button id="tab2d" data-view="2d">2D 地图</button>
   </div>
@@ -411,6 +433,15 @@
   <section id="stage" class="stage view-3d">
     <canvas id="cv" aria-label="2D 工位地图"></canvas>
     <iframe id="rig3d" src="viewer.html?embed=1&amp;debug=rig&amp;v=2" title="3D 工位"></iframe>
+    <img id="cam" class="cam" alt="实时摄像头">
+    <div id="camNote" class="camnote" hidden>
+      <b>摄像头没有画面</b>
+      <span>先双击 <code>web\操作台窗口.bat</code>，或运行 <code>python tools\camera_web.py</code>。</span>
+      <div class="row">
+        <button id="camRetry" class="btn">重试</button>
+        <button id="camTo3d" class="btn ghost">切到 3D 工位</button>
+      </div>
+    </div>
 
     <div class="hud">
       <div id="stateLabel" class="state">等待连接</div>
@@ -431,7 +462,7 @@
         <div class="kicker">还没有连上工位</div>
         <h2>三步开始操作</h2>
         <ol class="steps">
-          <li><b>1</b><div><strong>双击启动</strong><span>双击 <code>web\操作台.bat</code>，它会打开 Blender 和这个页面。</span></div></li>
+          <li><b>1</b><div><strong>双击启动</strong><span>双击 <code>web\操作台窗口.bat</code>：左边实时画面，右边操作。</span></div></li>
           <li><b>2</b><div><strong>等它连上</strong><span>Blender 启动需要几秒，右上角会从「未连接」变成「在线」。</span></div></li>
           <li><b>3</b><div><strong>开始操作</strong><span>用右侧的快速动作或方向键；没有实体就点「先看演示」。</span></div></li>
         </ol>
@@ -524,7 +555,8 @@
     <div><b>快速动作</b><p>「过来 / 回去 / 看我」点一下就行，球会自己移动。</p></div>
     <div><b>手动移动</b><p>按住屏幕方向键或键盘 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>；<kbd>Q</kbd> 降、<kbd>E</kbd> 升；松开即停。</p></div>
     <div><b>随时停止</b><p>按 <kbd>空格</kbd> 或右上角红色「停止」，任何状态下都有效。</p></div>
-    <div><b>连不上工位</b><p>先双击 <code>web\操作台.bat</code>。如果还是不行，再手动开 <code>blender\指挥.bat</code> 和 <code>web\control.bat</code>。没有实体可以点「演示模式」。</p></div>
+    <div><b>连不上工位</b><p>双击 <code>web\操作台窗口.bat</code>。如果还是不行，再手动开 <code>blender\指挥.bat</code> 和 <code>web\control.bat</code>。没有实体可以点「演示模式」。</p></div>
+    <div><b>实时画面</b><p>左侧「实时画面」需要摄像头服务；`操作台窗口.bat` 会自动启动。没有画面时点「重试」。</p></div>
   </div>
 </dialog>
 
@@ -639,6 +671,8 @@ const connText = $('connText');
 const onboarding = $('onboarding');
 const demoRibbon = $('demoRibbon');
 const targetTip = $('targetTip');
+const cam = $('cam');
+const camNote = $('camNote');
 const toastEl = $('toast');
 const helpDlg = $('helpDlg');
 const logEl = $('log');
@@ -746,13 +780,48 @@ function setControlsEnabled(on) {
 }
 
 // ---------------- 视图 ----------------
+let camTimer = null;
+let camRetryTimer = null;
+
+function camStart() {
+  if (state.view !== 'camera') return;
+  camNote.hidden = true;
+  cam.src = 'http://127.0.0.1:8765/stream?t=' + Date.now();
+  clearTimeout(camTimer);
+  camTimer = setTimeout(() => {
+    if (state.view === 'camera' && !(cam.naturalWidth > 0)) camFailed();
+  }, 2500);
+}
+
+function camFailed() {
+  if (state.view !== 'camera') return;
+  camNote.hidden = false;
+  clearTimeout(camRetryTimer);
+  camRetryTimer = setTimeout(camStart, 4000);
+}
+
+cam.addEventListener('load', () => { camNote.hidden = true; });
+cam.addEventListener('error', camFailed);
+$('camRetry').addEventListener('click', camStart);
+$('camTo3d').addEventListener('click', () => setView('3d'));
+
+function refreshOnboarding() {
+  onboarding.hidden = state.view === 'camera' || state.mode === 'live'
+    || state.mode === 'demo' || state.everLive;
+}
+
 function setView(view) {
   state.view = view;
+  stage.classList.toggle('view-camera', view === 'camera');
   stage.classList.toggle('view-3d', view === '3d');
   stage.classList.toggle('view-2d', view === '2d');
+  $('tabCam').classList.toggle('on', view === 'camera');
   $('tab3d').classList.toggle('on', view === '3d');
   $('tab2d').classList.toggle('on', view === '2d');
   targetTip.hidden = view !== '2d';
+  if (view === 'camera') camStart();
+  else { clearTimeout(camTimer); clearTimeout(camRetryTimer); }
+  refreshOnboarding();
   if (view === '2d') { fit(); paint(); }
 }
 
@@ -1127,7 +1196,7 @@ async function sendIntent(msg, label, quiet = false) {
     if (!quiet) {
       showToast(stale ? '遥测超时，先等它恢复（停止仍然可用）。'
                       : '还没有连接工位。先打开 Blender，或进入演示模式。', 'warn');
-      if (!state.everLive) onboarding.hidden = false;
+      refreshOnboarding();
     }
     return false;
   }
@@ -1142,7 +1211,7 @@ async function sendIntent(msg, label, quiet = false) {
     return true;
   } catch (e) {
     state.mode = 'offline';
-    onboarding.hidden = state.everLive;
+    refreshOnboarding();
     if (!quiet) showToast('发送失败：' + e.message + '（先打开 Blender 指挥场景）', 'bad');
     log('发送失败：' + e.message);
     render();
@@ -1219,6 +1288,7 @@ $('goBtn').addEventListener('click', () => {
   sendGoto([Number($('ix').value), Number($('iy').value), Number($('iz').value)]);
 });
 
+$('tabCam').addEventListener('click', () => setView('camera'));
 $('tab3d').addEventListener('click', () => setView('3d'));
 $('tab2d').addEventListener('click', () => setView('2d'));
 
@@ -1338,21 +1408,21 @@ async function poll(force = false) {
           showToast('检测到工位，已切回实时');
           log('检测到工位，切回实时');
         }
-        onboarding.hidden = true;
+        refreshOnboarding();
         post3D(j);
       }
     } else {
       if (state.mode !== 'demo') {
         state.mode = 'offline';
         state.tele = null;
-        onboarding.hidden = state.everLive;
+        refreshOnboarding();
       }
     }
   } catch (e) {
     if (state.mode !== 'demo') {
       state.mode = 'offline';
       // 保留最后一帧，页面不会突然变空；状态栏会显示「遥测中断」
-      onboarding.hidden = state.everLive;
+      refreshOnboarding();
     }
     if (force) showToast('连不上控制桥。确认 web\\control.bat 已经打开。', 'bad');
   } finally {
@@ -1384,7 +1454,8 @@ if (location.protocol === 'file:') {
   $('onboardNote').textContent = '当前是直接打开的本地文件：请双击 web\\control.bat 启动控制桥，再从这里操作。';
 }
 setControlsEnabled(false);
-setView('3d');
+const startView = new URLSearchParams(location.search).get('view');
+setView(startView === 'camera' || startView === '2d' ? startView : '3d');
 fetch('params.json', { cache: 'no-store' })
   .then(r => r.ok ? r.json() : null)
   .then(p => { if (p && ConsoleCore.applyParams(p)) { if (state.view === '2d') paint(); } })

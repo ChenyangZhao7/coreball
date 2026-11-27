@@ -41,8 +41,9 @@ docs/
 web/
   viewer.html             offline WebGL viewer (plug-in animation + 3D ball/rig)
   command.html            3D command page
-  control.html            operator console (quick actions + manual + expressions + 2D/3D)
+  control.html            operator console (quick actions + manual + expressions + camera/2D/3D)
   操作台.bat              one-click launcher: Blender + bridge + console
+  操作台窗口.bat          one-click single app window: camera left, console right
 blender/
   build_ball.py           the core ball, φ80
   build_hub.py            hub assembly (yaw + extension); renders on its own
@@ -124,8 +125,9 @@ The online Wokwi version is in `wokwi\README.md`: one ESP32 and two crossed UART
 
 ### 2D / 3D operator console
 
-Double-click `web\操作台.bat` (recommended): it starts Blender's command scene and the local bridge, then opens <http://127.0.0.1:8010/>. To open only the page, use `web\control.bat`.
+Double-click `web\操作台窗口.bat` (recommended): it starts Blender's command scene, the local bridge and the camera, then opens a single Edge/Chrome app window — **live camera on the left, console on the right**. To open only the page, use `web\操作台.bat` or `web\control.bat`.
 
+- Left tabs: **live camera** (USB camera + hand skeleton) / **3D rig** / **2D map**;
 - The first screen is a three-step guide. If Blender is not running, click "先看演示" to explore a simulated ball; it never commands real hardware;
 - **Quick actions**: come / back / look / stop;
 - **Manual**: hold the on-screen arrows or W/A/S/D, Q/E for height, release to stop; click the floor to go to a point; Space stops;
