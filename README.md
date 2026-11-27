@@ -41,7 +41,8 @@ docs/
 web/
   viewer.html             offline WebGL viewer (plug-in animation + 3D ball/rig)
   command.html            3D command page
-  control.html            debug console (2D map + 3D ball module + 3D rig)
+  control.html            operator console (quick actions + manual + expressions + 2D/3D)
+  操作台.bat              one-click launcher: Blender + bridge + console
 blender/
   build_ball.py           the core ball, φ80
   build_hub.py            hub assembly (yaw + extension); renders on its own
@@ -121,17 +122,18 @@ python tools\sim_link.py
 
 The online Wokwi version is in `wokwi\README.md`: one ESP32 and two crossed UART wires.
 
-### 2D / 3D debug console
+### 2D / 3D operator console
 
-Double-click `web\control.bat`; it starts a local bridge and opens <http://127.0.0.1:8010/>.
+Double-click `web\操作台.bat` (recommended): it starts Blender's command scene and the local bridge, then opens <http://127.0.0.1:8010/>. To open only the page, use `web\control.bat`.
 
-- Start `blender\指挥.bat` first; the bridge forwards commands to UDP 4590;
-- **Hold W/A/S/D to move, Q/E for height, release to stop**; click the floor to go to a point; Space stops;
+- The first screen is a three-step guide. If Blender is not running, click "先看演示" to explore a simulated ball; it never commands real hardware;
+- **Quick actions**: come / back / look / stop;
+- **Manual**: hold the on-screen arrows or W/A/S/D, Q/E for height, release to stop; click the floor to go to a point; Space stops;
+- **3D rig**: booth, ball, hub, eight cables and the red neck cylinder update live; drag to orbit, wheel to zoom;
+- **2D map**: top-down position, click to go;
+- **Status and ropes**: support set, per-rope tension, loosest tension and safety layer, folded into a details panel;
+- **Expressions**: idle / listening / acting;
 - The page shows Blender's **actual position** (ball / hub), not the commanded target;
-- **3D ball module**: the real ball model on the right; the face window follows idle / listening / acting, and the ball turns with the hub;
-- **3D rig view**: toggle "3D 工位" at the top to see the booth, ball, hub, all eight cables and the red neck cylinder live; a fictional seated person (about 185 cm / 80 kg proportions) gives scale; drag to orbit, wheel to zoom, toggle back to the 2D map;
-- **8 ropes**: the four currently carrying load are highlighted as A1–A8 with per-rope tension, plus the loosest tension, force closure and safety-layer veto;
-- 3D isometric view, height slider, come / back / look / expression;
 - Telemetry goes from Blender to UDP 4591 and is cached by the bridge at `GET /state`; the event log can be exported;
 - The ball center is clamped inside the three walls (x ±775, y **250–1055**; the first 250 mm in front of the back wall is outside the practical workspace, see decision 29).
 

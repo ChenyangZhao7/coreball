@@ -42,3 +42,16 @@ test('地面夹在实用区内', () => {
   assert.deepEqual(C.clampFloor(-2000, 1200), [-775, 1055]);
   assert.deepEqual(C.clampFloor(0, 520), [0, 520]);
 });
+
+test('高度夹在 900–1500', () => {
+  assert.equal(C.clampZ(0), 900);
+  assert.equal(C.clampZ(2000), 1500);
+  assert.equal(C.clampZ(1300), 1300);
+});
+
+test('演示模式按速度靠近目标', () => {
+  assert.deepEqual(C.stepToward([0, 0, 0], [100, 0, 0], 100, 0.1), [10, 0, 0]);
+  assert.deepEqual(C.stepToward([0, 0, 0], [1, 0, 0], 100, 0.1), [1, 0, 0]);
+  assert.deepEqual(C.stepToward([0, 0, 0], [3, 4, 0], 100, 0.05), [3, 4, 0]);
+  assert.deepEqual(C.stepToward([1, 2, 3], [1, 2, 3], 100, 0.1), [1, 2, 3]);
+});

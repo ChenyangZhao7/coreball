@@ -3,170 +3,528 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CoreBall · 调试台</title>
+<meta name="description" content="CoreBall 桌面悬浮球操作台：快速动作、手动移动、表情和实时绳索状态。">
+<title>CoreBall · 操作台</title>
 <style>
-  :root { color-scheme: dark; --line:#1d2732; --panel:#10161d; --ink:#dfe7ef; --dim:#7d8a99; }
+  :root {
+    color-scheme: dark;
+    --bg: #0a0e12;
+    --panel: #111820;
+    --panel2: #0d1319;
+    --line: #26313c;
+    --line2: #1a242e;
+    --ink: #e6edf3;
+    --muted: #8b949e;
+    --dim: #5f6f7c;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --blue: #58a6ff;
+    --accent: #2f81f7;
+  }
+  * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin: 0; background: #0a0e12; color: var(--ink);
-         font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif;
-         display: flex; flex-direction: column; overflow: hidden; }
-  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-           padding: 10px 16px; border-bottom: 1px solid var(--line); background: #0d131a; }
-  h1 { font-size: 15px; font-weight: 600; letter-spacing: .06em; margin: 0 8px 0 0; }
-  #dot { width: 9px; height: 9px; border-radius: 50%; background: #55606c; }
-  #dot.on { background: #46c98b; box-shadow: 0 0 8px #46c98b; }
-  #dot.warn { background: #e0b060; box-shadow: 0 0 8px #e0b060; }
-  #dot.off { background: #d9534f; }
-  #link { font-size: 12px; color: var(--dim); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #101821, #0d1319);
+    flex: 0 0 auto;
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; margin-right: 6px; }
+  .brand .mark {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 10px rgba(63, 185, 80, .7);
+    align-self: center;
+  }
+  .brand b { font-size: 15px; letter-spacing: .04em; }
+  .brand .sub { color: var(--muted); font-size: 12px; }
+  .conn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 10px; border-radius: 999px;
+    background: #0d1319; border: 1px solid var(--line);
+    font-size: 12px; color: var(--muted);
+  }
+  .conn i { width: 7px; height: 7px; border-radius: 50%; background: #55606c; }
+  .conn.on { color: var(--ok); border-color: #1d4b2a; background: #0f1f15; }
+  .conn.on i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .conn.warn { color: var(--warn); border-color: #4a3a16; background: #1f1a0f; }
+  .conn.warn i { background: var(--warn); }
+  .conn.demo { color: var(--blue); border-color: #1d3a5c; background: #0f1a26; }
+  .conn.demo i { background: var(--blue); }
+  .conn.off { color: var(--bad); border-color: #4a1d1d; background: #1f1010; }
+  .conn.off i { background: var(--bad); }
+
+  .viewtabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .viewtabs button {
+    background: transparent; color: var(--muted); border: 0;
+    padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  }
+  .viewtabs button.on { background: #1b2733; color: var(--ink); }
   .spacer { flex: 1; }
-  button, a.btn { background: #17202a; color: #cfdae6; border: 1px solid #263242;
-                  border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit;
-                  text-decoration: none; }
-  button:hover, a.btn:hover { background: #1d2937; }
-  button.on { background: #2a6f8f; border-color: #3d92b8; color: #fff; }
-  button:disabled { opacity: .4; cursor: default; }
-  main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 336px; }
-  #stage { position: relative; min-width: 0; }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-  #rig3d { position: absolute; inset: 0; width: 100%; height: 100%; border: 0;
-           background: #0a0e12; display: none; }
-  #stage.rig #rig3d { display: block; }
-  #stage.rig #cv, #stage.rig #banner, #stage.rig #hint { display: none; }
-  .ball3d { width: 100%; height: 228px; border: 1px solid #1a242e; border-radius: 10px;
-            background: #0b1016; display: block; }
-  #hint { position: absolute; left: 14px; bottom: 12px; color: var(--dim);
-          font-size: 12px; pointer-events: none; }
-  #banner { position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
-            color: #8b9aab; font-size: 13px; text-align: center; pointer-events: none;
-            background: rgba(10,14,18,.72); border: 1px solid #1d2732; border-radius: 10px;
-            padding: 12px 18px; display: none; white-space: pre-line; }
-  aside { border-left: 1px solid var(--line); background: var(--panel);
-          padding: 12px; overflow: auto; }
-  .group { margin-bottom: 14px; }
-  .group h3 { font-size: 11px; letter-spacing: .12em; color: #6f7f90;
-              margin: 0 0 7px; font-weight: 600; text-transform: uppercase; }
-  .group h3 .val { float: right; text-transform: none; letter-spacing: 0; }
-  .dpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-  .dpad button { height: 38px; padding: 0; }
-  .dpad button.held { background: #2a6f8f; border-color: #3d92b8; color: #fff; }
-  .row { display: flex; gap: 6px; flex-wrap: wrap; }
-  .row button { flex: 1; min-width: 62px; }
-  .row.two button { min-width: 0; }
-  .kv { display: flex; justify-content: space-between; gap: 10px;
-        font: 12px/1.9 ui-monospace, Consolas, monospace; color: var(--dim); }
-  .kv b { color: #b7c7d6; font-weight: 500; text-align: right; }
-  .kv b.bad { color: #e0716c; }
-  .kv b.good { color: #63c79a; }
-  #ropes { display: grid; gap: 3px; margin: 4px 0 6px; }
-  .rope { display: grid; grid-template-columns: 26px 1fr 58px; align-items: center;
-          gap: 6px; font: 11.5px ui-monospace, Consolas, monospace; color: var(--dim); }
-  .rope i { height: 5px; background: #1a242e; border-radius: 3px; overflow: hidden; }
-  .rope i b { display: block; height: 100%; background: #4fa87f; border-radius: 3px; }
-  .rope em { font-style: normal; text-align: right; color: #9fb0c2; }
-  input[type=range] { width: 100%; accent-color: #4fa87f; }
-  .hrow { display: grid; grid-template-columns: 34px 1fr 42px; align-items: center;
-          gap: 8px; margin-top: 8px; font-size: 12px; color: var(--dim); }
-  .hrow span { text-align: right; font: 12px ui-monospace, Consolas, monospace; }
-  #log { height: 118px; overflow: auto; background: #0b1016; border: 1px solid #1a242e;
-         border-radius: 8px; padding: 7px 9px; font: 11.5px/1.55 ui-monospace, Consolas, monospace;
-         color: #8b9aab; white-space: pre-wrap; }
-  #log a, .group h3 a { color: #6497b8; text-decoration: none; font-size: 11px; }
-  #log a:hover, .group h3 a:hover { text-decoration: underline; }
-  .links { display: flex; gap: 8px; justify-content: flex-end; }
-  @media (max-width: 860px) {
-    main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
-    aside { border-left: 0; border-top: 1px solid var(--line); max-height: 48vh; }
+
+  .btn {
+    background: #17202a; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 12px; font: inherit; cursor: pointer;
+    min-height: 34px;
+  }
+  .btn:hover:not(:disabled) { border-color: #4a5a6a; background: #1d2937; }
+  .btn.primary { background: #1f6feb; border-color: #2f81f7; color: #fff; }
+  .btn.primary:hover { background: #2b7cf0; }
+  .btn.ghost { background: transparent; }
+  .btn.danger { background: #b62324; border-color: #e5534b; color: #fff; font-weight: 600; }
+  .btn.danger:hover { background: #c9302c; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .iconbtn {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line); font: 600 15px/1 serif; cursor: pointer;
+  }
+  .iconbtn:hover { color: var(--ink); border-color: #4a5a6a; }
+
+  /* ---------- 主区域 ---------- */
+  main {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 372px;
+  }
+  .stage {
+    position: relative;
+    min-width: 0; min-height: 0;
+    background: #0a0e12;
+    overflow: hidden;
+  }
+  .stage canvas, .stage iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: 0; display: block;
+  }
+  .stage canvas { display: none; touch-action: none; }
+  .stage.view-2d canvas { display: block; }
+  .stage.view-2d iframe,
+  .stage.view-2d .hud .viewhint3d { display: none; }
+  .stage.view-3d .hud .viewhint2d { display: none; }
+
+  .hud {
+    position: absolute; left: 16px; top: 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+    max-width: min(520px, 80%);
+  }
+  .state {
+    align-self: flex-start;
+    padding: 7px 12px; border-radius: 9px;
+    background: rgba(13, 19, 25, .82);
+    border: 1px solid rgba(74, 90, 106, .55);
+    backdrop-filter: blur(6px);
+    font-size: 15px; font-weight: 600; letter-spacing: .03em;
+  }
+  .hudrow { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 4px 9px; border-radius: 999px;
+    background: rgba(13, 19, 25, .78);
+    border: 1px solid rgba(74, 90, 106, .4);
+    color: var(--muted); font: 12px/1.4 ui-monospace, Consolas, monospace;
+    backdrop-filter: blur(6px);
+  }
+  .chip.good { color: var(--ok); border-color: #1d4b2a; }
+  .chip.warn { color: var(--warn); border-color: #4a3a16; }
+  .chip.bad { color: var(--bad); border-color: #4a1d1d; }
+  .ribbon {
+    position: absolute; left: 50%; top: 14px; transform: translateX(-50%);
+    padding: 5px 14px; border-radius: 999px;
+    background: #10263a; border: 1px solid #1d4a73; color: #8cc8ff;
+    font-size: 12.5px; letter-spacing: .02em;
+    pointer-events: none;
+  }
+  .targettip {
+    position: absolute; left: 16px; bottom: 14px;
+    color: var(--dim); font-size: 12px; pointer-events: none;
+  }
+
+  /* ---------- 首次连接引导 ---------- */
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background: radial-gradient(ellipse at 50% 38%, rgba(12, 20, 28, .55), rgba(6, 9, 12, .88));
+    z-index: 5;
+    overflow: auto;
+  }
+  .overlay[hidden] { display: none; }
+  .onboard {
+    width: min(560px, 100%);
+    background: #0f161e;
+    border: 1px solid #2a3846;
+    border-radius: 16px;
+    padding: 22px 24px 20px;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+  }
+  .kicker { color: var(--warn); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+  .onboard h2 { margin: 6px 0 16px; font-size: 22px; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .steps li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; }
+  .steps li > b {
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: #172536; border: 1px solid #2f4a66; color: #9dc7f0;
+    font-size: 12px;
+  }
+  .steps strong { display: block; font-size: 14px; }
+  .steps span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+  code {
+    background: #16202b; border: 1px solid #26313c; border-radius: 5px;
+    padding: 1px 5px; font: 12px ui-monospace, Consolas, monospace; color: #c9d7e4;
+  }
+  .onboard-actions { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .onboard-note { margin: 12px 0 0; color: var(--dim); font-size: 12px; }
+
+  /* ---------- 右侧控制区 ---------- */
+  .dock {
+    border-left: 1px solid var(--line);
+    background: var(--panel);
+    overflow: auto;
+    padding: 12px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card {
+    background: var(--panel2);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .cardhead {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 10px; margin-bottom: 10px;
+  }
+  .cardhead h2 { margin: 0; font-size: 13px; letter-spacing: .06em; color: #aebdca; }
+  .hint { color: var(--muted); font-size: 11.5px; }
+
+  .quickgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .act {
+    display: grid; grid-template-columns: 30px 1fr; grid-template-rows: auto auto;
+    column-gap: 8px; row-gap: 0;
+    align-items: center; text-align: left;
+    min-height: 74px; padding: 10px 12px;
+    background: #13202b; border: 1px solid #263747; border-radius: 11px;
+    color: var(--ink); font: inherit; cursor: pointer;
+  }
+  .act:hover:not(:disabled) { background: #172a38; border-color: #3a5a72; }
+  .act:disabled { opacity: .4; cursor: not-allowed; }
+  .act .ico {
+    grid-row: 1 / span 2;
+    width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: #0e1720; border: 1px solid #2a3d4e;
+    color: #8fc6ef; font-size: 15px;
+  }
+  .act b { font-size: 15px; font-weight: 600; }
+  .act small { color: var(--muted); font-size: 11.5px; }
+  .act.stop { background: #241214; border-color: #4a2023; }
+  .act.stop:hover:not(:disabled) { background: #2d1518; border-color: #6b2a2d; }
+  .act.stop .ico { color: #ff8f88; border-color: #5a2629; }
+
+  .manual .pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 6px;
+    aspect-ratio: 1.55 / 1;
+    max-height: 178px;
+    margin: 2px auto 10px;
+    width: min(100%, 300px);
+  }
+  .pad button {
+    background: #13202b; border: 1px solid #263747; border-radius: 9px;
+    color: #b9d3e7; font: 600 18px/1 "Segoe UI", sans-serif;
+    cursor: pointer; display: grid; place-items: center;
+    touch-action: none; user-select: none;
+  }
+  .pad button small { font-size: 10px; font-weight: 400; color: var(--dim); margin-top: 2px; }
+  .pad button:hover:not(:disabled) { background: #172a38; border-color: #3a5a72; }
+  .pad button.held { background: #1f4d6b; border-color: #4d9cc9; color: #fff; }
+  .pad button.center {
+    background: #241214; border-color: #4a2023; color: #ff8f88;
+    font-size: 13px;
+  }
+  .pad button:disabled { opacity: .4; cursor: not-allowed; }
+  .pad .up { grid-area: 1 / 2; }
+  .pad .left { grid-area: 2 / 1; }
+  .pad .center { grid-area: 2 / 2; }
+  .pad .right { grid-area: 2 / 3; }
+  .pad .down { grid-area: 3 / 2; }
+
+  .height { display: grid; grid-template-columns: 38px 1fr 38px; gap: 8px; align-items: center; }
+  .height > button {
+    height: 36px; border-radius: 8px; border: 1px solid var(--line);
+    background: #17202a; color: var(--ink); font-size: 18px; cursor: pointer;
+  }
+  .height > button:hover:not(:disabled) { background: #1d2937; }
+  .height > button:disabled { opacity: .4; cursor: not-allowed; }
+  .heightmid span { display: block; color: var(--muted); font-size: 11.5px; margin-bottom: 1px; }
+  .heightmid b { color: var(--ink); font: 12px ui-monospace, Consolas, monospace; }
+  input[type=range] { width: 100%; accent-color: var(--ok); }
+  .speed { display: grid; grid-template-columns: 38px 1fr; gap: 8px; align-items: center; margin-top: 8px; color: var(--muted); font-size: 12px; }
+
+  .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+  .chipbtn {
+    flex: 1; min-width: 76px; min-height: 42px;
+    border-radius: 9px; border: 1px solid var(--line);
+    background: #13202b; color: var(--muted); font: inherit; cursor: pointer;
+  }
+  .chipbtn:hover:not(:disabled) { border-color: #3a5a72; color: var(--ink); }
+  .chipbtn.on { background: #12351f; border-color: #2a6b3a; color: #7ee2a0; }
+  .chipbtn:disabled { opacity: .4; cursor: not-allowed; }
+
+  details { border-top: 1px solid var(--line2); padding-top: 8px; margin-top: 8px; }
+  details:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+  summary {
+    cursor: pointer; color: #aebdca; font-size: 12.5px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸"; color: var(--dim); margin-right: 6px; }
+  details[open] > summary::before { content: "▾"; }
+  summary .dot { width: 8px; height: 8px; border-radius: 50%; background: #55606c; margin-left: auto; }
+  summary .dot.on { background: var(--ok); }
+  summary .dot.bad { background: var(--bad); }
+  summary .links { margin-left: auto; display: flex; gap: 10px; }
+  summary a { color: var(--blue); text-decoration: none; font-size: 11.5px; }
+  summary a:hover { text-decoration: underline; }
+
+  .kv {
+    display: flex; justify-content: space-between; gap: 12px;
+    padding: 1px 0; color: var(--muted); font-size: 12.5px;
+  }
+  .kv b { color: #c6d3df; font-weight: 500; text-align: right; font-family: ui-monospace, Consolas, monospace; }
+  .kv b.good { color: var(--ok); }
+  .kv b.bad { color: var(--bad); }
+  .kv b.warn { color: var(--warn); }
+
+  .ropes { display: grid; gap: 4px; margin: 7px 0; }
+  .rope { display: grid; grid-template-columns: 28px 1fr 58px; gap: 7px; align-items: center; font-size: 11.5px; color: var(--dim); }
+  .rope i { height: 6px; background: #1a242e; border-radius: 3px; overflow: hidden; }
+  .rope i b { display: block; height: 100%; background: var(--ok); border-radius: 3px; }
+  .rope em { font-style: normal; text-align: right; color: #9fb0c2; font-family: ui-monospace, Consolas, monospace; }
+
+  .coord { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 6px; align-items: end; margin-top: 8px; }
+  .coord label { display: grid; gap: 3px; color: var(--muted); font-size: 11.5px; }
+  .coord input {
+    width: 100%; min-width: 0;
+    background: #0b1117; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 7px; font: 12px ui-monospace, Consolas, monospace;
+  }
+  .coord .btn { min-height: 32px; padding: 6px 10px; }
+
+  .log {
+    height: 118px; overflow: auto; margin-top: 8px;
+    background: #0b1117; border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 8px; white-space: pre-wrap;
+    font: 11.5px/1.55 ui-monospace, Consolas, monospace; color: #8b9aab;
+  }
+
+  /* ---------- 提示 / 帮助 ---------- */
+  .toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 10px);
+    max-width: min(560px, 86vw);
+    padding: 9px 16px; border-radius: 9px;
+    background: #182430; border: 1px solid #31465a; color: #dbe8f3;
+    font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity .18s, transform .18s; z-index: 20;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast.warn { border-color: #6b5320; background: #2a2110; color: #ffd98a; }
+  .toast.bad { border-color: #6b2a2d; background: #2a1214; color: #ffb4ae; }
+
+  dialog {
+    width: min(540px, 92vw);
+    background: #0f161e; color: var(--ink);
+    border: 1px solid #2a3846; border-radius: 14px;
+    padding: 20px 22px;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .62); }
+  dialog h2 { margin: 0 0 12px; font-size: 18px; }
+  dialog .close { float: right; }
+  .help-grid { display: grid; gap: 10px; margin-top: 12px; }
+  .help-grid b { color: #cfe0ee; }
+  .help-grid p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+  dialog kbd {
+    display: inline-block; min-width: 20px; text-align: center;
+    background: #16202b; border: 1px solid #2a3a48; border-bottom-width: 2px;
+    border-radius: 5px; padding: 0 5px; font: 11px ui-monospace, Consolas, monospace;
+  }
+
+  @media (max-width: 980px) {
+    body { overflow: auto; }
+    main { grid-template-columns: 1fr; grid-template-rows: minmax(320px, 52vh) auto; }
+    .stage { min-height: 320px; }
+    .dock { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+    .hud { left: 10px; top: 10px; }
+    .onboard { padding: 18px; }
+  }
+  @media (max-width: 520px) {
+    .topbar { padding: 8px 10px; gap: 8px; }
+    .brand .sub { display: none; }
+    .dock { padding: 8px; }
+    .quickgrid { gap: 6px; }
+    .act { min-height: 66px; padding: 8px 10px; }
+    .overlay { align-items: flex-start; padding: 12px; }
+    .onboard { margin: 4px 0 16px; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>CoreBall · 调试台</h1>
-  <span id="dot" title="调试连接状态"></span>
-  <span id="link">未连接</span>
-  <button id="mode">斜视图</button>
-  <button id="rig">3D 工位</button>
+
+<header class="topbar">
+  <div class="brand"><span class="mark"></span><b>CoreBall</b><span class="sub">操作台</span></div>
+  <div id="conn" class="conn"><i></i><span id="connText">连接中…</span></div>
+  <div class="viewtabs" role="group" aria-label="视图切换">
+    <button id="tab3d" class="on" data-view="3d">3D 工位</button>
+    <button id="tab2d" data-view="2d">2D 地图</button>
+  </div>
   <span class="spacer"></span>
-  <a class="btn" href="command.html">3D 指挥</a>
-  <a class="btn" href="viewer.html">模型查看</a>
+  <button id="helpBtn" class="iconbtn" title="快捷键与帮助" aria-label="帮助">?</button>
+  <button id="demoBtn" class="btn ghost">演示模式</button>
+  <button id="stopBtn" class="btn danger" title="立即停止（空格）">■ 停止</button>
 </header>
 
 <main>
-  <section id="stage">
-    <canvas id="cv"></canvas>
-    <iframe id="rig3d" title="3D 工位"></iframe>
-    <div id="hint">按住 W/A/S/D 平移 · Q/E 升降 · 松开即停 ｜ 点地面定位 ｜ 空格停</div>
-    <div id="banner"></div>
+  <section id="stage" class="stage view-3d">
+    <canvas id="cv" aria-label="2D 工位地图"></canvas>
+    <iframe id="rig3d" src="viewer.html?embed=1&amp;debug=rig" title="3D 工位"></iframe>
+
+    <div class="hud">
+      <div id="stateLabel" class="state">等待连接</div>
+      <div class="hudrow">
+        <span id="posChip" class="chip">球 —</span>
+        <span id="tensionChip" class="chip">张力 —</span>
+        <span id="safeChip" class="chip">安全 —</span>
+        <span class="chip viewhint3d">拖动画面旋转 · 滚轮缩放</span>
+        <span class="chip viewhint2d">点击地面定位</span>
+      </div>
+    </div>
+
+    <div id="demoRibbon" class="ribbon" hidden>演示模式 · 不会控制真机</div>
+    <div id="targetTip" class="targettip" hidden>点击地面，让它过去</div>
+
+    <div id="onboarding" class="overlay">
+      <div class="onboard">
+        <div class="kicker">还没有连上工位</div>
+        <h2>三步开始操作</h2>
+        <ol class="steps">
+          <li><b>1</b><div><strong>双击启动</strong><span>双击 <code>web\操作台.bat</code>，它会打开 Blender 和这个页面。</span></div></li>
+          <li><b>2</b><div><strong>等它连上</strong><span>Blender 启动需要几秒，右上角会从「未连接」变成「在线」。</span></div></li>
+          <li><b>3</b><div><strong>开始操作</strong><span>用右侧的快速动作或方向键；没有实体就点「先看演示」。</span></div></li>
+        </ol>
+        <div class="onboard-actions">
+          <button id="retryBtn" class="btn primary">重新检测</button>
+          <button id="startDemoBtn" class="btn">先看演示</button>
+        </div>
+        <p class="onboard-note" id="onboardNote">没有实体也能试：演示模式会模拟球的移动，不会控制真机。</p>
+      </div>
+    </div>
   </section>
 
-  <aside>
-    <div class="group">
-      <h3>球模块 <span class="val" id="ballmode">3D 预览</span></h3>
-      <iframe id="ball3d" class="ball3d" src="viewer.html?embed=1&model=ball" title="3D 球模块"></iframe>
-    </div>
-    <div class="group">
-      <h3>手动 <span class="val" id="speedv">240 mm/s</span></h3>
-      <input id="speed" type="range" min="80" max="400" step="20" value="240">
-      <div class="dpad" style="margin-top:6px">
-        <span></span><button data-jog="w">W 前</button><span></span>
-        <button data-jog="a">A 左</button><button data-intent="stop">停</button><button data-jog="d">D 右</button>
-        <span></span><button data-jog="s">S 后</button><span></span>
+  <aside class="dock">
+    <section class="card">
+      <div class="cardhead"><h2>快速动作</h2><span class="hint">点一下，球自己过去</span></div>
+      <div class="quickgrid">
+        <button class="act" data-intent="come"><span class="ico">↘</span><b>过来</b><small>到身边</small></button>
+        <button class="act" data-intent="back"><span class="ico">↖</span><b>回去</b><small>回侧位</small></button>
+        <button class="act" data-intent="look"><span class="ico">◉</span><b>看我</b><small>转向你</small></button>
+        <button class="act stop" data-intent="stop"><span class="ico">■</span><b>停住</b><small>立即停止</small></button>
       </div>
-      <div class="row two" style="margin-top:6px">
-        <button data-jog="q">Q 降</button>
-        <button data-jog="e">E 升</button>
+    </section>
+
+    <section class="card manual">
+      <div class="cardhead"><h2>手动移动</h2><span class="hint" id="speedv">240 mm/s</span></div>
+      <div class="pad" role="group" aria-label="手动方向">
+        <button data-jog="w" class="up" title="前（W）">↑<small>前</small></button>
+        <button data-jog="a" class="left" title="左（A）">←<small>左</small></button>
+        <button data-intent="stop" class="center" title="停（空格）">停</button>
+        <button data-jog="d" class="right" title="右（D）">→<small>右</small></button>
+        <button data-jog="s" class="down" title="后（S）">↓<small>后</small></button>
       </div>
-    </div>
-
-    <div class="group">
-      <h3>实时状态</h3>
-      <div class="kv"><span>球</span><b id="ball">—</b></div>
-      <div class="kv"><span>吊点</span><b id="hub">—</b></div>
-      <div class="kv"><span>目标</span><b id="tgt">—</b></div>
-      <div class="kv"><span>安全修正</span><b id="req">—</b></div>
-      <div class="kv"><span>遥测</span><b id="age">—</b></div>
-      <div class="kv"><span>指令</span><b id="last">—</b></div>
-    </div>
-
-    <div class="group">
-      <h3>绳索 <span class="val" id="support">—</span></h3>
-      <div id="ropes"></div>
-      <div class="kv"><span>最松</span><b id="margin">—</b></div>
-      <div class="kv"><span>力封闭</span><b id="closed">—</b></div>
-      <div class="kv"><span>安全层</span><b id="blocked">—</b></div>
-    </div>
-
-    <div class="group">
-      <h3>预设</h3>
-      <div class="row">
-        <button data-intent="come">过来</button>
-        <button data-intent="back">回去</button>
-        <button data-intent="look">看我</button>
+      <div class="height">
+        <button data-jog="q" title="下降（Q）">−</button>
+        <div class="heightmid">
+          <span>高度 <b id="zv">1300</b> mm</span>
+          <input id="z" type="range" min="900" max="1500" step="5" value="1300" aria-label="高度">
+        </div>
+        <button data-jog="e" title="上升（E）">＋</button>
       </div>
-      <div class="row two" style="margin-top:6px">
-        <button data-intent="up">升 120</button>
-        <button data-intent="down">降 120</button>
-        <button data-intent="left">左 120</button>
-        <button data-intent="right">右 120</button>
-      </div>
-      <label class="hrow">高度 <input id="z" type="range" min="900" max="1500" step="5" value="1300"><span id="zv">1300</span></label>
-    </div>
+      <label class="speed"><span>速度</span><input id="speed" type="range" min="80" max="400" step="20" value="240" aria-label="移动速度"></label>
+    </section>
 
-    <div class="group">
-      <h3>表情</h3>
-      <div class="row">
-        <button data-expr="idle" class="on">待命</button>
-        <button data-expr="listening">在听</button>
-        <button data-expr="acting">执行</button>
+    <section class="card">
+      <div class="cardhead"><h2>表情</h2><span class="hint">脸窗</span></div>
+      <div class="chips">
+        <button data-expr="idle" class="chipbtn on">待命</button>
+        <button data-expr="listening" class="chipbtn">在听</button>
+        <button data-expr="acting" class="chipbtn">执行</button>
       </div>
-    </div>
+    </section>
 
-    <div class="group">
-      <h3>日志 <span class="links"><a href="#" id="export">导出</a><a href="#" id="clear">清空</a></span></h3>
-      <div id="log"></div>
-    </div>
+    <section class="card" aria-label="状态与更多">
+      <details open>
+        <summary>状态与绳索 <span id="statusDot" class="dot"></span></summary>
+        <div class="kv"><span>连接</span><b id="dConn">—</b></div>
+        <div class="kv"><span>球位置</span><b id="dBall">—</b></div>
+        <div class="kv"><span>目标</span><b id="dTarget">—</b></div>
+        <div class="kv"><span>遥测延迟</span><b id="dAge">—</b></div>
+        <div class="kv"><span>支撑绳</span><b id="dSupport">—</b></div>
+        <div id="ropeRows" class="ropes"></div>
+        <div class="kv"><span>最松张力</span><b id="dMargin">—</b></div>
+        <div class="kv"><span>安全层</span><b id="dBlocked">—</b></div>
+        <div class="kv"><span>最后指令</span><b id="dLast">—</b></div>
+      </details>
+      <details>
+        <summary>去指定坐标</summary>
+        <div class="coord">
+          <label>x <input id="ix" type="number" step="10" value="-380"></label>
+          <label>y <input id="iy" type="number" step="10" value="520"></label>
+          <label>z <input id="iz" type="number" step="10" min="900" max="1500" value="1300"></label>
+          <button id="goBtn" class="btn primary">前往</button>
+        </div>
+      </details>
+      <details>
+        <summary>操作记录 <span class="links"><a href="#" id="export">导出</a><a href="#" id="clear">清空</a></span></summary>
+        <div id="log" class="log"></div>
+      </details>
+    </section>
   </aside>
 </main>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<dialog id="helpDlg">
+  <button class="btn close" id="helpClose">关闭</button>
+  <h2>操作台怎么用</h2>
+  <div class="help-grid">
+    <div><b>快速动作</b><p>「过来 / 回去 / 看我」点一下就行，球会自己移动。</p></div>
+    <div><b>手动移动</b><p>按住屏幕方向键或键盘 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>；<kbd>Q</kbd> 降、<kbd>E</kbd> 升；松开即停。</p></div>
+    <div><b>随时停止</b><p>按 <kbd>空格</kbd> 或右上角红色「停止」，任何状态下都有效。</p></div>
+    <div><b>连不上工位</b><p>先双击 <code>web\操作台.bat</code>。如果还是不行，再手动开 <code>blender\指挥.bat</code> 和 <code>web\control.bat</code>。没有实体可以点「演示模式」。</p></div>
+  </div>
+</dialog>
 
 <script id="console-core">
 // ===== 纯逻辑：无 DOM 依赖，测试从这里加载 =====
@@ -220,106 +578,196 @@ function clampFloor(x, y) {
           Math.max(PARAMS.floor.y0, Math.min(PARAMS.floor.y1, y))];
 }
 
-globalThis.ConsoleCore = { KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, PARAMS, applyParams };
+function clampZ(z) {
+  const n = Number(z);
+  return Math.max(900, Math.min(1500, Number.isFinite(n) ? n : 1300));
+}
+
+// 演示模式：按速度直线靠近目标
+function stepToward(pos, target, speed, dt) {
+  const p = (pos || [0, 0, 0]).map(Number);
+  const t = (target || p).map(Number);
+  const d = [t[0] - p[0], t[1] - p[1], t[2] - p[2]];
+  const dist = Math.hypot(d[0], d[1], d[2]);
+  const max = Math.max(0, Number(speed) || 0) * Math.max(0, Number(dt) || 0);
+  if (dist <= 1e-9 || dist <= max) return t.slice();
+  const k = max / dist;
+  return [p[0] + d[0] * k, p[1] + d[1] * k, p[2] + d[2] * k];
+}
+
+globalThis.ConsoleCore = {
+  KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, clampZ, stepToward,
+  PARAMS, applyParams,
+};
 </script>
 
 <script>
-// ===== 应用：绘制、遥测、键盘 / 按钮操控 =====
 (() => {
-const { jogVector, clampFloor, PARAMS } = ConsoleCore;
+const { jogVector, clampFloor, clampZ, stepToward, PARAMS } = ConsoleCore;
 
-const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-const dot = document.getElementById('dot');
-const linkEl = document.getElementById('link');
-const banner = document.getElementById('banner');
-const speedEl = document.getElementById('speed');
-const speedV = document.getElementById('speedv');
-const zEl = document.getElementById('z');
-const zv = document.getElementById('zv');
-const logEl = document.getElementById('log');
-const ball3d = document.getElementById('ball3d');
-const rig3d = document.getElementById('rig3d');
-const rigBtn = document.getElementById('rig');
-let rigOn = false, rigLoaded = false;
-
+// ---------------- 常量 ----------------
 const NEAR = [-380, 520, 1300];
 const HOME = [-430, 760, 1420];
-const ROVER_NEAR = [-450, 650, 0];
-const ROVER_HOME = [600, 250, 0];
 const FALLBACK_ANCHORS = [
   [-760, 12, 1849], [780, 1100, 1760], [-300, 12, 1849], [-780, 1100, 1760],
   [760, 12, 1670], [-808, 200, 1849], [808, 500, 1760], [808, 800, 1760],
 ];
+const FACE_NAME = { idle: '待命', listening: '在听', acting: '执行' };
+const ACTION_NAME = {
+  come: '过来', back: '回去', look: '看我', stop: '停住',
+  up: '升 120', down: '降 120', left: '左 120', right: '右 120',
+};
+
+// ---------------- DOM ----------------
+const $ = id => document.getElementById(id);
+const cv = $('cv');
+const ctx = cv.getContext('2d');
+const stage = $('stage');
+const rig3d = $('rig3d');
+const connEl = $('conn');
+const connText = $('connText');
+const onboarding = $('onboarding');
+const demoRibbon = $('demoRibbon');
+const targetTip = $('targetTip');
+const toastEl = $('toast');
+const helpDlg = $('helpDlg');
+const logEl = $('log');
+const speedEl = $('speed');
+const speedV = $('speedv');
+const zEl = $('z');
+const zv = $('zv');
+
+// ---------------- 状态 ----------------
 const state = {
-  mode: '2d',
+  view: '3d',
+  mode: 'connecting',   // connecting | live | offline | demo
+  everLive: false,
   tele: null,
   target: null,
   z: 1300,
   speed: 240,
   zDrag: false,
   lastLink: '',
-  lastIntent: '',
+  demo: {
+    pos: NEAR.slice(),
+    target: NEAR.slice(),
+    expr: 'idle',
+    yaw: 0,
+  },
 };
 
 const keys = new Set();
 let jogWasOn = false;
+let polling = false;
+let toastTimer = null;
 
-// ---------------- 日志 ----------------
-const logs = [];
-function log(text) {
-  const now = new Date();
-  logs.push({ at: now, text });
-  if (logs.length > 400) logs.shift();
-  renderLog();
+// ---------------- 小工具 ----------------
+function fmtVec(p) {
+  return Array.isArray(p) && p.length === 3
+    ? p.map(v => Math.round(v)).join(', ') : '—';
 }
-function renderLog() {
-  logEl.textContent = logs.slice(-160).map(e =>
-    e.at.toLocaleTimeString() + '  ' + e.text).join('\n');
+
+function anchorsNow() {
+  const a = state.tele && state.tele.anchors;
+  return (a && a.length) ? a : (PARAMS.anchors || FALLBACK_ANCHORS);
+}
+
+function currentBall() {
+  if (state.mode === 'demo') return state.demo.pos;
+  return (state.tele && state.tele.ball) || null;
+}
+
+function activeTele() {
+  if (state.mode === 'demo') return {
+    ok: true, demo: true, body: 'winch',
+    ball: state.demo.pos.slice(),
+    hub: [state.demo.pos[0], state.demo.pos[1], state.demo.pos[2] + 160],
+    anchors: anchorsNow(),
+    support: [1, 2, 3, 5],
+    tensions: [2.70, 2.34, 2.31, 2.31],
+    margin: 2.31, closed: true, blocked: false,
+    expr: state.demo.expr, yaw: state.demo.yaw,
+    age_ms: 0, stale: false, last: '演示',
+  };
+  return state.tele;
+}
+
+function canControl() {
+  if (state.mode === 'demo') return true;
+  return state.mode === 'live' && !(state.tele && state.tele.stale);
+}
+
+function showToast(text, kind = '') {
+  toastEl.textContent = text;
+  toastEl.className = 'toast show' + (kind ? ' ' + kind : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.className = 'toast'; }, 3200);
+}
+
+function log(text) {
+  const at = new Date().toLocaleTimeString();
+  logEl.textContent += (logEl.textContent ? '\n' : '') + at + '  ' + text;
+  const lines = logEl.textContent.split('\n');
+  if (lines.length > 200) logEl.textContent = lines.slice(-200).join('\n');
   logEl.scrollTop = logEl.scrollHeight;
 }
-function exportLog() {
-  const body = logs.map(e => e.at.toISOString() + '  ' + e.text).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
-  a.download = 'coreball-debug-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt';
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+
+function setConn(kind, text) {
+  connEl.className = 'conn ' + kind;
+  connText.textContent = text;
+  if (state.lastLink !== kind) {
+    state.lastLink = kind;
+    if (kind === 'off') log('未连接：控制桥或 Blender 没启动');
+    else if (kind === 'warn') log('遥测超时：Blender 可能卡住或被关掉');
+    else if (kind === 'on') log('已连接：收到实时遥测');
+    else if (kind === 'demo') log('演示模式：不控制真机');
+  }
+}
+
+function setControlsEnabled(on) {
+  document.querySelectorAll('[data-jog],[data-intent],[data-expr]').forEach(b => {
+    // 停止按钮永远可用
+    if (b.dataset.intent === 'stop') { b.disabled = false; return; }
+    b.disabled = !on;
+  });
+  $('goBtn').disabled = !on;
+  zEl.disabled = !on;
+  ['ix', 'iy', 'iz'].forEach(id => { $(id).disabled = !on; });
 }
 
 // ---------------- 视图 ----------------
+function setView(view) {
+  state.view = view;
+  stage.classList.toggle('view-3d', view === '3d');
+  stage.classList.toggle('view-2d', view === '2d');
+  $('tab3d').classList.toggle('on', view === '3d');
+  $('tab2d').classList.toggle('on', view === '2d');
+  targetTip.hidden = view !== '2d';
+  if (view === '2d') { fit(); paint(); }
+}
+
 function fit() {
   const r = cv.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   cv.width = Math.max(1, Math.round(r.width * dpr));
   cv.height = Math.max(1, Math.round(r.height * dpr));
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  paint();
 }
-window.addEventListener('resize', fit);
 
 function view() {
   const W = cv.clientWidth, H = cv.clientHeight;
-  if (state.mode === '2d') {
-    const k = Math.min(W / 1900, H / 1300);
-    return { k, cx: W / 2, cy: H / 2, iso: false };
-  }
-  const k = Math.min(W / 2100, H / 2600);
-  return { k, cx: W / 2, cy: H * 0.86, iso: true };
+  const k = Math.min(W / 1900, H / 1300);
+  return { k, cx: W / 2, cy: H / 2 };
 }
 
-function proj(x, y, z) {
+function proj(x, y) {
   const v = view();
-  if (!v.iso) return [v.cx + x * v.k, v.cy + (y - 550) * v.k];
-  return [v.cx + (x - 0.6 * y) * v.k, v.cy + (y * 0.35 - z) * v.k];
+  return [v.cx + x * v.k, v.cy + (y - 550) * v.k];
 }
 
 function unproject(sx, sy) {
   const v = view();
-  if (!v.iso) return [(sx - v.cx) / v.k, (sy - v.cy) / v.k + 550];
-  const y = (sy - v.cy) / (0.35 * v.k);
-  const x = (sx - v.cx) / v.k + 0.6 * y;
-  return [x, y];
+  return [(sx - v.cx) / v.k, (sy - v.cy) / v.k + 550];
 }
 
 function poly(pts, fill, stroke) {
@@ -337,12 +785,8 @@ function cableColor(margin) {
   return '#d9534f';
 }
 
-function anchorsNow() {
-  const a = state.tele && state.tele.anchors;
-  return (a && a.length) ? a : (PARAMS.anchors || FALLBACK_ANCHORS);
-}
-
 function paint() {
+  if (state.view !== '2d') return;
   const W = cv.clientWidth, H = cv.clientHeight;
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = '#0a0e12';
@@ -352,79 +796,41 @@ function paint() {
   ctx.strokeStyle = '#121a22';
   ctx.lineWidth = 1;
   for (let x = -800; x <= 800; x += 200) {
-    const a = proj(x, 0, 0), b = proj(x, 1100, 0);
+    const a = proj(x, 0), b = proj(x, 1100);
     ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
   }
   for (let y = 0; y <= 1100; y += 100) {
-    const a = proj(-820, y, 0), b = proj(820, y, 0);
+    const a = proj(-820, y), b = proj(820, y);
     ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
   }
 
-  poly([proj(-820, 0, 0), proj(820, 0, 0), proj(820, 1100, 0), proj(-820, 1100, 0)],
+  poly([proj(-820, 0), proj(820, 0), proj(820, 1100), proj(-820, 1100)],
        'rgba(30,40,50,.35)', '#263543');
 
   // 三面围板
-  const WH = 1900;
-  if (state.mode === '2d') {
-    ctx.strokeStyle = '#3a4b5c'; ctx.lineWidth = 4;
-    [[[-820, 0], [-820, 1100]], [[820, 0], [820, 1100]], [[-820, 0], [820, 0]]]
-      .forEach(([a, b]) => {
-        const p0 = proj(a[0], a[1], 0), p1 = proj(b[0], b[1], 0);
-        ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
-      });
-    ctx.setLineDash([7, 7]); ctx.strokeStyle = '#2a3743';
-    const f0 = proj(-820, 1100, 0), f1 = proj(820, 1100, 0);
-    ctx.beginPath(); ctx.moveTo(f0[0], f0[1]); ctx.lineTo(f1[0], f1[1]); ctx.stroke();
-    ctx.setLineDash([]);
-  } else {
-    const fill = 'rgba(45,62,78,.22)', edge = '#3a4b5c';
-    poly([proj(-820, 0, 0), proj(820, 0, 0), proj(820, 0, WH), proj(-820, 0, WH)], fill, edge);
-    poly([proj(-820, 0, 0), proj(-820, 1100, 0), proj(-820, 1100, WH), proj(-820, 0, WH)], fill, edge);
-    poly([proj(820, 0, 0), proj(820, 1100, 0), proj(820, 1100, WH), proj(820, 0, WH)], fill, edge);
-    ctx.setLineDash([7, 7]); ctx.strokeStyle = '#2a3743';
-    const f0 = proj(-820, 1100, 0), f1 = proj(820, 1100, 0);
-    ctx.beginPath(); ctx.moveTo(f0[0], f0[1]); ctx.lineTo(f1[0], f1[1]); ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  ctx.strokeStyle = '#3a4b5c'; ctx.lineWidth = 4;
+  [[[-820, 0], [-820, 1100]], [[820, 0], [820, 1100]], [[-820, 0], [820, 0]]]
+    .forEach(([a, b]) => {
+      const p0 = proj(a[0], a[1]), p1 = proj(b[0], b[1]);
+      ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+    });
+  ctx.setLineDash([7, 7]); ctx.strokeStyle = '#2a3743';
+  const f0 = proj(-820, 1100), f1 = proj(820, 1100);
+  ctx.beginPath(); ctx.moveTo(f0[0], f0[1]); ctx.lineTo(f1[0], f1[1]); ctx.stroke();
+  ctx.setLineDash([]);
 
   // 桌子
-  const dx = 780, dy1 = 20, dy2 = 720, dz = 740;
-  if (state.mode === '2d') {
-    poly([proj(-dx, dy1, 0), proj(dx, dy1, 0), proj(dx, dy2, 0), proj(-dx, dy2, 0)],
-         'rgba(120,100,80,.25)', '#4a4036');
-  } else {
-    poly([proj(-dx, dy1, dz), proj(dx, dy1, dz), proj(dx, dy2, dz), proj(-dx, dy2, dz)],
-         'rgba(120,100,80,.35)', '#6a5a48');
-    [[-dx, dy1], [dx, dy1], [dx, dy2], [-dx, dy2]].forEach(([x, y]) => {
-      const a = proj(x, y, 0), b = proj(x, y, dz);
-      ctx.strokeStyle = '#3a322a'; ctx.beginPath();
-      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-    });
-  }
+  poly([proj(-780, 20), proj(780, 20), proj(780, 720), proj(-780, 720)],
+       'rgba(120,100,80,.25)', '#4a4036');
 
   // 脖子禁区
   const NX = PARAMS.neck.x, NY = PARAMS.neck.y, NR = PARAMS.neck.r;
-  if (state.mode === '2d') {
-    const c = proj(NX, NY, 0);
-    ctx.beginPath(); ctx.arc(c[0], c[1], NR * view().k, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(200,70,60,.12)'; ctx.strokeStyle = 'rgba(200,70,60,.65)';
-    ctx.fill(); ctx.stroke();
-  } else {
-    const v = view(), c0 = proj(NX, NY, 0);
-    [0, WH].forEach(z => {
-      const c = proj(NX, NY, z);
-      ctx.beginPath(); ctx.ellipse(c[0], c[1], NR * v.k, NR * 0.35 * v.k, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(200,70,60,.6)'; ctx.stroke();
-    });
-    for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
-      const x = NX + Math.cos(a) * NR, y = NY + Math.sin(a) * NR;
-      const p0 = proj(x, y, 0), p1 = proj(x, y, WH);
-      ctx.strokeStyle = 'rgba(200,70,60,.25)';
-      ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
-    }
-  }
+  const c = proj(NX, NY);
+  ctx.beginPath(); ctx.arc(c[0], c[1], NR * view().k, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(200,70,60,.12)'; ctx.strokeStyle = 'rgba(200,70,60,.65)';
+  ctx.fill(); ctx.stroke();
 
-  const tele = state.tele;
+  const tele = activeTele();
   const anchors = anchorsNow();
   const support = (tele && tele.support) || [];
   const hub = tele && tele.hub ? tele.hub : null;
@@ -435,8 +841,7 @@ function paint() {
     anchors.forEach((a, i) => {
       const active = support.includes(i);
       if (!active) return;
-      const p0 = proj(a[0], a[1], a[2]);
-      const p1 = proj(hub[0], hub[1], hub[2]);
+      const p0 = proj(a[0], a[1]), p1 = proj(hub[0], hub[1]);
       ctx.strokeStyle = cableColor(tele.margin);
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
@@ -445,7 +850,7 @@ function paint() {
 
   // 锚点
   anchors.forEach((a, i) => {
-    const p = proj(a[0], a[1], a[2]);
+    const p = proj(a[0], a[1]);
     const active = support.includes(i);
     ctx.beginPath(); ctx.arc(p[0], p[1], active ? 4 : 2.6, 0, Math.PI * 2);
     ctx.fillStyle = active ? '#8fa3b5' : '#3b4a58';
@@ -457,26 +862,10 @@ function paint() {
     }
   });
 
-  // 球 / 吊点
+  // 球
   if (ball) {
-    const z = state.mode === '2d' ? 0 : ball[2];
-    const bp = proj(ball[0], ball[1], z);
+    const bp = proj(ball[0], ball[1]);
     const r = Math.max(6, 40 * view().k);
-    if (state.mode === '3d') {
-      const f = proj(ball[0], ball[1], 0);
-      ctx.strokeStyle = 'rgba(140,200,240,.22)';
-      ctx.beginPath(); ctx.moveTo(bp[0], bp[1]); ctx.lineTo(f[0], f[1]); ctx.stroke();
-      if (hub) {
-        const hp = proj(hub[0], hub[1], hub[2]);
-        ctx.strokeStyle = 'rgba(180,200,220,.45)';
-        ctx.beginPath(); ctx.moveTo(bp[0], bp[1]); ctx.lineTo(hp[0], hp[1]); ctx.stroke();
-        ctx.beginPath(); ctx.arc(hp[0], hp[1], 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#9fb0c2'; ctx.fill();
-      }
-    } else if (hub) {
-      ctx.beginPath(); ctx.arc(bp[0], bp[1], r + 4, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(159,176,194,.35)'; ctx.stroke();
-    }
     ctx.beginPath(); ctx.arc(bp[0], bp[1], r, 0, Math.PI * 2);
     ctx.fillStyle = tele.stale ? '#a9a2a0' : '#cfe3f0';
     ctx.fill();
@@ -489,152 +878,248 @@ function paint() {
 
   // 目标十字
   if (state.target) {
-    const t = proj(state.target[0], state.target[1],
-                   state.mode === '2d' ? 0 : state.target[2]);
+    const t = proj(state.target[0], state.target[1]);
     ctx.strokeStyle = '#e0b060'; ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(t[0] - 7, t[1]); ctx.lineTo(t[0] + 7, t[1]);
     ctx.moveTo(t[0], t[1] - 7); ctx.lineTo(t[0], t[1] + 7);
     ctx.stroke();
   }
-
-  banner.style.display = tele ? 'none' : 'block';
-  banner.textContent = '等待 Blender 遥测…\n先开「指挥.bat」，再运行 tools/control_server.py';
 }
 
-// ---------------- 遥测 ----------------
+// ---------------- 3D 同步 ----------------
 function post3D(t) {
   if (!t) return;
   try {
-    if (ball3d.contentWindow)
-      ball3d.contentWindow.postMessage({ type: 'ball', expr: t.expr, yaw: t.yaw }, '*');
-    if (rig3d.contentWindow)
+    if (rig3d.contentWindow) {
       rig3d.contentWindow.postMessage({ type: 'telemetry', data: t }, '*');
+    }
   } catch (_) {}
 }
 
-function setRig(on) {
-  rigOn = on;
-  document.getElementById('stage').classList.toggle('rig', on);
-  rigBtn.classList.toggle('on', on);
-  rigBtn.textContent = on ? '2D 地图' : '3D 工位';
-  if (on) {
-    if (!rigLoaded) {
-      rig3d.src = 'viewer.html?embed=1&debug=rig';
-      rigLoaded = true;
-    }
-    post3D(state.tele);
+// ---------------- 渲染 ----------------
+function render() {
+  const tele = activeTele();
+  const demo = state.mode === 'demo';
+  const live = state.mode === 'live';
+  const stale = live && tele && tele.stale;
+
+  if (demo) setConn('demo', '演示');
+  else if (stale) setConn('warn', '遥测超时');
+  else if (live) setConn('on', '在线');
+  else if (state.mode === 'connecting') setConn('off', '连接中…');
+  else setConn('off', '未连接');
+
+  const label = $('stateLabel');
+  if (demo) label.textContent = '演示中';
+  else if (stale) label.textContent = '遥测中断';
+  else if (!live) label.textContent = state.everLive ? '遥测中断' : '等待连接';
+  else if (state.target && tele && tele.ball) {
+    const d = Math.hypot(tele.ball[0] - state.target[0], tele.ball[1] - state.target[1],
+                         tele.ball[2] - state.target[2]);
+    label.textContent = d > 20 ? '正在移动' : '悬停中';
+  } else label.textContent = '悬停中';
+
+  const ball = tele && tele.ball;
+  $('posChip').textContent = ball ? '球 ' + fmtVec(ball) : '球 —';
+  $('posChip').className = 'chip' + (ball ? '' : ' bad');
+
+  const tension = $('tensionChip');
+  if (demo) { tension.textContent = '张力 演示示意'; tension.className = 'chip warn'; }
+  else if (live && tele && tele.margin != null) {
+    tension.textContent = '最松 ' + Number(tele.margin).toFixed(2) + ' N';
+    tension.className = 'chip ' + (tele.margin >= PARAMS.tMin ? 'good' : 'bad');
+  } else { tension.textContent = '张力 —'; tension.className = 'chip'; }
+
+  const safe = $('safeChip');
+  if (demo) { safe.textContent = '安全 演示'; safe.className = 'chip warn'; }
+  else if (live && tele) {
+    safe.textContent = tele.blocked ? '安全 已拦截' : '安全 正常';
+    safe.className = 'chip ' + (tele.blocked ? 'bad' : 'good');
+  } else { safe.textContent = '安全 —'; safe.className = 'chip'; }
+
+  // 细节
+  $('dConn').textContent = demo ? '演示模式' : (live ? (stale ? '遥测超时' : '在线') : '未连接');
+  $('dConn').className = demo ? 'warn' : (live && !stale ? 'good' : 'bad');
+  $('dBall').textContent = ball ? fmtVec(ball) : '—';
+  $('dTarget').textContent = state.target ? fmtVec(state.target) : '—';
+  $('dAge').textContent = live && tele ? (tele.age_ms + ' ms' + (tele.stale ? '（超时）' : '')) : '—';
+  $('dAge').className = live && tele ? (tele.stale ? 'bad' : 'good') : '';
+
+  const support = (tele && tele.support) || [];
+  const names = (tele && tele.support_names) || support.map(i => 'A' + (i + 1));
+  $('dSupport').textContent = names.length ? names.join(' ') : '—';
+
+  const ropes = $('ropeRows');
+  const tensions = (tele && tele.tensions) || [];
+  if (demo) {
+    ropes.innerHTML = '<div class="hint">演示模式不读取真机张力。</div>';
   } else {
-    paint();
+    const frag = document.createDocumentFragment();
+    support.forEach((idx, k) => {
+      const ten = Number(tensions[k] || 0);
+      const row = document.createElement('div');
+      row.className = 'rope';
+      const name = document.createElement('span');
+      name.textContent = 'A' + (idx + 1);
+      const bar = document.createElement('i');
+      const fill = document.createElement('b');
+      fill.style.width = Math.max(2, Math.min(100, ten / 4 * 100)) + '%';
+      fill.style.background = cableColor(ten);
+      bar.appendChild(fill);
+      const val = document.createElement('em');
+      val.textContent = ten.toFixed(2) + ' N';
+      row.append(name, bar, val);
+      frag.appendChild(row);
+    });
+    ropes.replaceChildren(frag);
   }
-}
 
-rigBtn.addEventListener('click', () => setRig(!rigOn));
-rig3d.addEventListener('load', () => post3D(state.tele));
-ball3d.addEventListener('load', () => post3D(state.tele));
+  const margin = $('dMargin');
+  margin.textContent = live && tele && tele.margin != null ? tele.margin.toFixed(2) + ' N' : (demo ? '演示' : '—');
+  margin.className = live && tele && tele.margin != null ? (tele.margin >= PARAMS.tMin ? 'good' : 'bad') : '';
 
-function setLink(kind, text) {
-  dot.className = kind;
-  linkEl.textContent = text;
-  if (state.lastLink !== kind + text) {
-    state.lastLink = kind + text;
-    if (kind === 'off') log('未连接：控制桥或 Blender 没启动');
-    else if (kind === 'warn') log('遥测超时：Blender 可能卡住或被关掉');
-    else log('已连接：收到实时遥测');
-  }
-}
+  $('dBlocked').textContent = demo ? '演示模式' : (live && tele ? (tele.blocked ? '已拦截' : '正常') : '—');
+  $('dBlocked').className = live && tele && tele.blocked ? 'bad' : (live && tele ? 'good' : '');
+  $('dLast').textContent = (tele && tele.last) || '—';
 
-async function poll() {
-  try {
-    const r = await fetch('/state', { cache: 'no-store' });
-    const j = await r.json();
-    if (j.ok) {
-      state.tele = j;
-      setLink(j.stale ? 'warn' : 'on', j.stale ? '遥测超时' : '实时');
-      post3D(j);
-      if (!state.zDrag && j.ball) {
-        state.z = j.ball[2];
-        zEl.value = Math.round(state.z);
-        zv.textContent = Math.round(state.z);
-      }
-    } else {
-      state.tele = null;
-      setLink('off', '未连接');
-    }
-  } catch (e) {
-    state.tele = null;
-    setLink('off', '未连接');
-  }
-  renderPanel();
-  paint();
-}
-setInterval(poll, 100);
-
-function fmtVec(p) {
-  return p ? p.map(v => Math.round(v)).join(', ') : '—';
-}
-
-function renderPanel() {
-  const t = state.tele;
-  document.getElementById('ball').textContent = fmtVec(t && t.ball);
-  document.getElementById('hub').textContent = fmtVec(t && t.hub);
-  document.getElementById('tgt').textContent = fmtVec(state.target);
-  const req = document.getElementById('req');
-  req.textContent = (t && t.requested) ? fmtVec(t.requested) + ' → 已夹取' : '—';
-  req.className = (t && t.requested) ? 'bad' : '';
-  const age = document.getElementById('age');
-  age.textContent = t ? (t.age_ms + ' ms' + (t.stale ? '（超时）' : '')) : '—';
-  age.className = t ? (t.stale ? 'bad' : 'good') : '';
-  document.getElementById('last').textContent = (t && t.last) || '—';
-
-  const support = (t && t.support) || [];
-  const names = (t && t.support_names) || [];
-  document.getElementById('support').textContent = names.length ? names.join(' ') : '—';
-
-  const ropes = document.getElementById('ropes');
-  const tensions = (t && t.tensions) || [];
-  const frag = document.createDocumentFragment();
-  support.forEach((idx, k) => {
-    const ten = Number(tensions[k] || 0);
-    const row = document.createElement('div');
-    row.className = 'rope';
-    const name = document.createElement('span');
-    name.textContent = 'A' + (idx + 1);
-    const bar = document.createElement('i');
-    const fill = document.createElement('b');
-    fill.style.width = Math.max(2, Math.min(100, ten / 4 * 100)) + '%';
-    fill.style.background = cableColor(ten);
-    bar.appendChild(fill);
-    const val = document.createElement('em');
-    val.textContent = ten.toFixed(2) + ' N';
-    row.append(name, bar, val);
-    frag.appendChild(row);
-  });
-  ropes.replaceChildren(frag);
-
-  const margin = document.getElementById('margin');
-  margin.textContent = t && t.margin != null ? t.margin.toFixed(2) + ' N' : '—';
-  margin.className = t && t.margin != null ? (t.margin >= PARAMS.tMin ? 'good' : 'bad') : '';
-
-  const closed = document.getElementById('closed');
-  closed.textContent = t && t.closed != null ? (t.closed ? 'OK' : '失效') : '—';
-  closed.className = t && t.closed === false ? 'bad' : (t && t.closed ? 'good' : '');
-
-  const blocked = document.getElementById('blocked');
-  blocked.textContent = t ? (t.blocked ? '否决：目标在禁区内' : '放行') : '—';
-  blocked.className = t && t.blocked ? 'bad' : '';
+  $('statusDot').className = 'dot ' + (demo ? 'on' : (live && !stale ? 'on' : 'bad'));
 
   document.querySelectorAll('button[data-expr]').forEach(b =>
-    b.classList.toggle('on', !!t && b.dataset.expr === t.expr));
+    b.classList.toggle('on', !!tele && b.dataset.expr === tele.expr));
+
+  setControlsEnabled(canControl());
+
+  // 同步坐标 / 高度（正在输入时不覆盖）
+  if (ball && !state.zDrag) {
+    state.z = Math.round(ball[2]);
+    zEl.value = state.z;
+    zv.textContent = state.z;
+    const ae = document.activeElement;
+    const editing = ae && ['ix', 'iy', 'iz'].includes(ae.id);
+    if (!editing) {
+      $('ix').value = Math.round(ball[0]);
+      $('iy').value = Math.round(ball[1]);
+      $('iz').value = state.z;
+    }
+  }
+}
+
+// ---------------- 演示 ----------------
+function startDemo() {
+  const from = currentBall() || NEAR;
+  state.mode = 'demo';
+  state.tele = null;
+  state.demo.pos = from.slice();
+  state.demo.target = state.demo.pos.slice();
+  state.target = null;
+  onboarding.hidden = true;
+  demoRibbon.hidden = false;
+  $('demoBtn').textContent = '退出演示';
+  $('onboardNote').textContent = '演示模式会模拟球的移动，不会控制真机。';
+  log('进入演示模式');
+  showToast('演示模式：可以随便试，不会控制真机');
+  render();
+  if (state.view === '2d') { fit(); paint(); }
+}
+
+function exitDemo(reason) {
+  state.mode = state.tele ? 'live' : 'offline';
+  demoRibbon.hidden = true;
+  $('demoBtn').textContent = '演示模式';
+  state.target = null;
+  if (reason) showToast(reason);
+  log(reason || '退出演示模式');
+  render();
+  if (state.view === '2d') paint();
+}
+
+const DEMO_PRESETS = new Set(['come', 'back', 'look', 'up', 'down', 'left', 'right']);
+
+function demoIntent(msg) {
+  const d = state.demo;
+  const p = d.pos;
+  let intent = msg.intent;
+  let name = msg.name;
+  if (DEMO_PRESETS.has(intent)) { name = intent; intent = 'preset'; }
+  switch (intent) {
+    case 'stop':
+      d.target = p.slice();
+      state.target = null;
+      break;
+    case 'goto': {
+      const xy = clampFloor(msg.point[0], msg.point[1]);
+      d.target = [xy[0], xy[1], clampZ(msg.point[2])];
+      state.target = d.target.slice();
+      break;
+    }
+    case 'jog': {
+      const raw = [p[0] + Number(msg.v[0] || 0) * 0.4,
+                   p[1] + Number(msg.v[1] || 0) * 0.4,
+                   clampZ(p[2] + Number(msg.v[2] || 0) * 0.4)];
+      const xy = clampFloor(raw[0], raw[1]);
+      d.target = [xy[0], xy[1], raw[2]];
+      break;
+    }
+    case 'expression':
+      d.expr = msg.name || 'idle';
+      break;
+    case 'preset': {
+      if (name === 'come') d.target = NEAR.slice();
+      else if (name === 'back') d.target = HOME.slice();
+      else if (name === 'up') d.target = [p[0], p[1], clampZ(p[2] + 120)];
+      else if (name === 'down') d.target = [p[0], p[1], clampZ(p[2] - 120)];
+      else if (name === 'left') d.target = [p[0] - 120, p[1], p[2]];
+      else if (name === 'right') d.target = [p[0] + 120, p[1], p[2]];
+      else if (name === 'look') {
+        d.target = p.slice();
+        d.expr = 'listening';
+        d.yaw = 0;
+      }
+      if (name !== 'look') d.expr = 'acting';
+      state.target = d.target.slice();
+      break;
+    }
+    default:
+      break;
+  }
+  render();
+  if (state.view === '2d') paint();
+}
+
+function demoTick() {
+  if (state.mode !== 'demo') return;
+  const d = state.demo;
+  d.pos = stepToward(d.pos, d.target, Math.max(240, state.speed), 0.05);
+  post3D(activeTele());
+  render();
+  if (state.view === '2d') paint();
 }
 
 // ---------------- 发送 ----------------
-function markSend(ok) {
-  if (!ok) setLink('off', '发送失败');
+function intentLabel(msg) {
+  if (msg.intent === 'expression') return '表情：' + (FACE_NAME[msg.name] || msg.name);
+  if (msg.intent === 'goto') return '前往 ' + fmtVec(msg.point);
+  if (msg.intent === 'jog') return '';
+  if (msg.intent === 'preset') return ACTION_NAME[msg.name] || msg.name;
+  return ACTION_NAME[msg.intent] || msg.intent;
 }
 
 async function sendIntent(msg, label, quiet = false) {
-  if (msg.intent !== 'goto') state.target = null;
+  if (state.mode === 'demo') {
+    demoIntent(msg);
+    if (!quiet) { showToast(label || intentLabel(msg)); log(label || intentLabel(msg)); }
+    return true;
+  }
+  const stale = state.tele && state.tele.stale;
+  if (state.mode !== 'live' || (stale && msg.intent !== 'stop')) {
+    if (!quiet) {
+      showToast(stale ? '遥测超时，先等它恢复（停止仍然可用）。'
+                      : '还没有连接工位。先打开 Blender，或进入演示模式。', 'warn');
+      if (!state.everLive) onboarding.hidden = false;
+    }
+    return false;
+  }
   try {
     const r = await fetch('/intent', {
       method: 'POST',
@@ -642,81 +1127,57 @@ async function sendIntent(msg, label, quiet = false) {
       body: JSON.stringify(msg),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    markSend(true);
-    if (!quiet) log(label || msg.intent);
+    if (!quiet) { showToast(label || intentLabel(msg)); log(label || intentLabel(msg)); }
+    return true;
   } catch (e) {
-    markSend(false);
-    if (!quiet) log('发送失败：' + e.message + '（先开 Blender 指挥场景）');
+    state.mode = 'offline';
+    onboarding.hidden = state.everLive;
+    if (!quiet) showToast('发送失败：' + e.message + '（先打开 Blender 指挥场景）', 'bad');
+    log('发送失败：' + e.message);
+    render();
+    return false;
   }
 }
 
 function sendGoto(p, label) {
   const xy = clampFloor(p[0], p[1]);
-  const q = [xy[0], xy[1], p[2]];
+  const q = [xy[0], xy[1], clampZ(p[2])];
   state.target = q.slice();
-  sendIntent({ intent: 'goto', point: q }, label || ('去 ' + fmtVec(q)));
+  sendIntent({ intent: 'goto', point: q }, label || ('前往 ' + fmtVec(q)));
 }
 
-// ---------------- 手动 jog ----------------
-function jogTick() {
-  const v = jogVector(keys, state.speed);
-  const active = v.some(x => x !== 0);
-  if (!active && !jogWasOn) return;
-  const t = state.tele;
-  if (!t || t.stale || t.body !== 'winch') {
-    jogWasOn = false;
-    return;
-  }
-  sendIntent({ intent: 'jog', v }, null, true);
-  jogWasOn = active;
-}
-setInterval(jogTick, 50);
-
+// ---------------- 交互 ----------------
 function setKey(k, down) {
   if (down) keys.add(k); else keys.delete(k);
   document.querySelectorAll('button[data-jog="' + k + '"]').forEach(b =>
     b.classList.toggle('held', down));
 }
 
-// 键盘
-const TYPING = ['INPUT', 'TEXTAREA', 'SELECT'];
-window.addEventListener('keydown', e => {
-  const ae = document.activeElement;
-  if (ae && TYPING.includes(ae.tagName)) return;
-  const k = e.key.toLowerCase();
-  if (k === ' ') {
-    e.preventDefault();
-    keys.clear();
-    jugButtons(false);
-    sendIntent({ intent: 'stop' }, '停');
-    return;
-  }
-  if (ConsoleCore.KEY_DIR[k]) {
-    e.preventDefault();
-    setKey(k, true);
-  }
-});
-window.addEventListener('keyup', e => {
-  const k = e.key.toLowerCase();
-  if (ConsoleCore.KEY_DIR[k]) {
-    e.preventDefault();
-    setKey(k, false);
-  }
-});
-window.addEventListener('blur', () => { keys.clear(); jugButtons(false); });
-
-function jugButtons(on) {
-  document.querySelectorAll('button[data-jog]').forEach(b =>
-    b.classList.toggle('held', on));
+function clearKeys() {
+  keys.clear();
+  document.querySelectorAll('button[data-jog]').forEach(b => b.classList.remove('held'));
 }
 
-// 按住按钮 = 按住方向键
+document.querySelectorAll('button[data-intent]').forEach(b => {
+  b.addEventListener('click', () => {
+    const name = b.dataset.intent;
+    if (name === 'stop') clearKeys();
+    sendIntent({ intent: name });
+  });
+});
+
+document.querySelectorAll('button[data-expr]').forEach(b => {
+  b.addEventListener('click', () => {
+    sendIntent({ intent: 'expression', name: b.dataset.expr }, '表情：' + (FACE_NAME[b.dataset.expr] || b.dataset.expr));
+  });
+});
+
 document.querySelectorAll('button[data-jog]').forEach(b => {
   const k = b.dataset.jog;
   b.addEventListener('pointerdown', e => {
     e.preventDefault();
-    b.setPointerCapture(e.pointerId);
     setKey(k, true);
+    try { b.setPointerCapture(e.pointerId); } catch (_) {}
   });
   const up = e => {
     try { b.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -725,20 +1186,6 @@ document.querySelectorAll('button[data-jog]').forEach(b => {
   b.addEventListener('pointerup', up);
   b.addEventListener('pointercancel', up);
   b.addEventListener('pointerleave', up);
-});
-
-document.querySelectorAll('button[data-intent]').forEach(b => {
-  b.addEventListener('click', () => {
-    const name = b.dataset.intent;
-    if (name === 'stop') { keys.clear(); jugButtons(false); }
-    sendIntent({ intent: name });
-  });
-});
-
-document.querySelectorAll('button[data-expr]').forEach(b => {
-  b.addEventListener('click', () => {
-    sendIntent({ intent: 'expression', name: b.dataset.expr }, '表情 ' + b.dataset.expr);
-  });
 });
 
 speedEl.addEventListener('input', () => {
@@ -753,15 +1200,69 @@ zEl.addEventListener('input', () => {
 });
 zEl.addEventListener('change', () => {
   state.zDrag = false;
-  const base = (state.tele && state.tele.ball) || NEAR;
+  const base = currentBall() || NEAR;
   sendGoto([base[0], base[1], state.z], '高度 ' + state.z);
 });
 
-// 点地面定位
+$('goBtn').addEventListener('click', () => {
+  sendGoto([Number($('ix').value), Number($('iy').value), Number($('iz').value)]);
+});
+
+$('tab3d').addEventListener('click', () => setView('3d'));
+$('tab2d').addEventListener('click', () => setView('2d'));
+
+$('stopBtn').addEventListener('click', () => {
+  clearKeys();
+  if (state.mode === 'demo') {
+    state.demo.target = state.demo.pos.slice();
+    state.target = null;
+    showToast('已停止（演示）');
+    log('停止');
+    render();
+    return;
+  }
+  sendIntent({ intent: 'stop' }, '停止');
+});
+
+$('demoBtn').addEventListener('click', () => {
+  if (state.mode === 'demo') exitDemo('已退出演示模式');
+  else startDemo();
+});
+
+$('retryBtn').addEventListener('click', async () => {
+  await poll(true);
+  if (state.mode === 'offline' || state.mode === 'connecting') {
+    showToast('还是没连上。检查 Blender 是否开着、是否双击了 web\\control.bat。', 'warn');
+  }
+});
+
+$('startDemoBtn').addEventListener('click', startDemo);
+
+$('helpBtn').addEventListener('click', () => {
+  if (typeof helpDlg.showModal === 'function') helpDlg.showModal();
+  else helpDlg.setAttribute('open', '');
+});
+$('helpClose').addEventListener('click', () => helpDlg.close());
+
+$('export').addEventListener('click', e => {
+  e.preventDefault();
+  const body = logEl.textContent || '';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
+  a.download = 'coreball-console-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('clear').addEventListener('click', e => {
+  e.preventDefault();
+  logEl.textContent = '';
+});
+
+// 2D 地图点击定位
 let down = null;
 cv.addEventListener('pointerdown', e => {
   down = [e.clientX, e.clientY];
-  cv.setPointerCapture(e.pointerId);
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
 });
 cv.addEventListener('pointerup', e => {
   if (!down) return;
@@ -770,37 +1271,117 @@ cv.addEventListener('pointerup', e => {
   if (moved > 6) return;
   const r = cv.getBoundingClientRect();
   const p = unproject(e.clientX - r.left, e.clientY - r.top);
-  const z = (state.tele && state.tele.ball) ? state.tele.ball[2] : state.z;
-  sendGoto([p[0], p[1], z]);
+  const base = currentBall() || NEAR;
+  sendGoto([p[0], p[1], base[2]]);
 });
 
-const modeBtn = document.getElementById('mode');
-modeBtn.addEventListener('click', () => {
-  state.mode = state.mode === '2d' ? '3d' : '2d';
-  modeBtn.textContent = state.mode === '2d' ? '斜视图' : '俯视图';
-  paint();
+// 键盘
+const TYPING = ['INPUT', 'TEXTAREA', 'SELECT'];
+window.addEventListener('keydown', e => {
+  const ae = document.activeElement;
+  if (ae && TYPING.includes(ae.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === ' ') {
+    e.preventDefault();
+    clearKeys();
+    $('stopBtn').click();
+    return;
+  }
+  if (k === '?') { e.preventDefault(); $('helpBtn').click(); return; }
+  if (ConsoleCore.KEY_DIR[k]) {
+    e.preventDefault();
+    setKey(k, true);
+  }
 });
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (ConsoleCore.KEY_DIR[k]) {
+    e.preventDefault();
+    setKey(k, false);
+  }
+});
+window.addEventListener('blur', clearKeys);
+window.addEventListener('resize', () => { if (state.view === '2d') { fit(); paint(); } });
+rig3d.addEventListener('load', () => post3D(activeTele()));
 
-document.getElementById('export').addEventListener('click', e => {
-  e.preventDefault();
-  exportLog();
-});
-document.getElementById('clear').addEventListener('click', e => {
-  e.preventDefault();
-  logs.length = 0;
-  renderLog();
-});
+// ---------------- 轮询 ----------------
+async function poll(force = false) {
+  if (polling) return;
+  polling = true;
+  try {
+    const r = await fetch('/state', { cache: 'no-store' });
+    const j = await r.json();
+    if (j && j.ok) {
+      state.tele = j;
+      if (j.stale && state.mode === 'demo') {
+        // 服务器里可能还留着上一轮的旧帧；不要因此把演示踢掉
+      } else {
+        const wasDemo = state.mode === 'demo';
+        const wasOffline = state.mode === 'offline' || state.mode === 'connecting';
+        state.mode = 'live';
+        if (!j.stale) state.everLive = true;
+        if (wasDemo && !j.stale) {
+          state.target = null;
+          demoRibbon.hidden = true;
+          $('demoBtn').textContent = '演示模式';
+          showToast('检测到工位，已切回实时');
+          log('检测到工位，切回实时');
+        }
+        onboarding.hidden = true;
+        post3D(j);
+      }
+    } else {
+      if (state.mode !== 'demo') {
+        state.mode = 'offline';
+        state.tele = null;
+        onboarding.hidden = state.everLive;
+      }
+    }
+  } catch (e) {
+    if (state.mode !== 'demo') {
+      state.mode = 'offline';
+      // 保留最后一帧，页面不会突然变空；状态栏会显示「遥测中断」
+      onboarding.hidden = state.everLive;
+    }
+    if (force) showToast('连不上控制桥。确认 web\\control.bat 已经打开。', 'bad');
+  } finally {
+    polling = false;
+    render();
+    if (state.view === '2d') paint();
+  }
+}
+
+function jogTick() {
+  if (state.mode === 'offline' || state.mode === 'connecting') return;
+  const v = jogVector(keys, state.speed);
+  const active = v.some(x => x !== 0);
+  if (!active && !jogWasOn) return;
+  if (state.mode === 'demo') {
+    if (active) demoIntent({ intent: 'jog', v });
+    jogWasOn = active;
+    return;
+  }
+  const t = state.tele;
+  if (!t || t.stale || t.body !== 'winch') { jogWasOn = false; return; }
+  sendIntent({ intent: 'jog', v }, null, true);
+  jogWasOn = active;
+}
 
 // ---------------- 启动 ----------------
-log('调试台就绪。先开 Blender「指挥」场景，再运行 tools/control_server.py。');
-// web/params.json（tools/export_params.py 生成）：锚点/阈值改一处，网页自动跟上
+log('操作台就绪。');
+if (location.protocol === 'file:') {
+  $('onboardNote').textContent = '当前是直接打开的本地文件：请双击 web\\control.bat 启动控制桥，再从这里操作。';
+}
+setControlsEnabled(false);
+setView('3d');
 fetch('params.json', { cache: 'no-store' })
   .then(r => r.ok ? r.json() : null)
-  .then(p => { if (p && ConsoleCore.applyParams(p)) paint(); })
+  .then(p => { if (p && ConsoleCore.applyParams(p)) { if (state.view === '2d') paint(); } })
   .catch(() => {});
-renderPanel();
-fit();
-poll();
+render();
+setInterval(() => poll(), 100);
+setInterval(jogTick, 50);
+setInterval(demoTick, 50);
 })();
 </script>
 </body>
