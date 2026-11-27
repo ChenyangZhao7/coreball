@@ -101,7 +101,8 @@ python tools\storyboard.py
 
 Double-click `web\serve.bat`; it opens <http://localhost:8000/web/viewer.html>.
 
-- Four views: ball / hub plug / full booth / insert animation;
+- Five views: ball / **internal structure** / hub plug / full booth / insert animation;
+- The internal view has a "show shell" toggle for the split ring, six columns, well cups, mainboard, battery and speaker;
 - Drag to orbit, wheel to zoom, works on a phone;
 - Fully offline; the models are local GLBs.
 

@@ -37,15 +37,23 @@
   body.embed header, body.embed #badge, body.embed #status { display: none; }
   body.embed #stage { height: 100vh; }
   body.embed .dot, body.embed .tag { display: none !important; }
+  .shellwrap { display: inline-flex; align-items: center; gap: 6px; color: #9aa8b8;
+               font-size: 12px; cursor: pointer; user-select: none; }
+  .shellwrap[hidden] { display: none; }
+  .shellwrap input { accent-color: #4fa87f; }
 </style>
 </head>
 <body>
 <header>
   <h1>CoreBall · 交互预览</h1>
   <button data-model="ball" class="on">球</button>
+  <button data-model="inner">内部结构</button>
   <button data-model="hub">吊点 / 插头</button>
   <button data-model="rig">工位整机</button>
   <button data-model="insert">插拔演示</button>
+  <label id="shellWrap" class="shellwrap" hidden>
+    <input id="shellToggle" type="checkbox"> 显示外壳
+  </label>
   <button id="replay" hidden>重播</button>
   <button id="roll">滚动 180°</button>
   <span class="hint">拖动旋转 · 滚轮缩放 · 双指缩放</span>
@@ -70,6 +78,8 @@ if (!gl) {
 const badge = document.getElementById("badge");
 const replayBtn = document.getElementById("replay");
 const rollBtn = document.getElementById("roll");
+const shellWrap = document.getElementById("shellWrap");
+const shellToggle = document.getElementById("shellToggle");
 
 // ?embed=1 隐藏自带 UI；?debug=rig 进入工位遥测模式
 const PARAMS = new URLSearchParams(location.search);
@@ -80,6 +90,7 @@ if (EMBED) document.body.classList.add("embed");
 
 const MODELS = {
   ball:   { src: "models/ball.glb",   badge: "球 · 顶井 4 焊盘 / 底井 6 焊盘 / 3 键槽 / 3 钢片" },
+  inner:  { src: "models/ball.glb",   badge: "内部结构 · 6061 分型环 / 六柱 / 井杯 / 主板 / 电池 / 喇叭" },
   hub:    { src: "models/hub.glb",    badge: "吊点 + 插头 · φ29.6 鼻子 / 3 键 / 3 磁铁 / 4 针" },
   rig:    { src: "models/rig.glb",    badge: "工位整机 · 四线吊装 + 球 + 吊点 · 坐姿人物 185 cm / 80 kg" },
   insert: { src: "models/insert.glb", badge: "插拔演示 · 插头压入顶井（可重播）" },
@@ -94,6 +105,7 @@ const HOTSPOTS = {
 };
 
 let scene = null;          // { nodes, meshes, materials, animations, world }
+let shellShown = false;    // 内部结构：默认隐藏外壳
 let model = "ball";
 let camera = { yaw: 35, pitch: 22, dist: 0.24, target: [0, 0, 0] };
 let dragging = false, last = [0, 0];
@@ -535,7 +547,11 @@ function resize() {
 window.addEventListener("resize", resize);
 
 let dots = [];
-function clearDots() { dots.forEach(d => d.el.remove()); dots = []; }
+let loadSeq = 0;
+function clearDots() {
+  dots.forEach(d => { d.el.remove(); d.tag.remove(); });
+  dots = [];
+}
 
 function buildDots(cfg) {
   clearDots();
@@ -686,6 +702,8 @@ canvas.addEventListener("wheel", e => {
 async function selectModel(name) {
   const cfg = MODELS[name];
   if (!cfg) return;
+  const seq = ++loadSeq;
+  if (!EMBED) clearDots();
   // 释放上一个模型的 GPU 资源，避免反复切换时累积
   if (scene) scene.meshes.forEach(prims => prims.forEach(p => {
     if (p.vao) gl.deleteVertexArray(p.vao);
@@ -696,6 +714,7 @@ async function selectModel(name) {
   model = name;
   rollAngle = 0; rollT0 = 0;
   rollBtn.hidden = name !== "ball";
+  shellWrap.hidden = name !== "inner";
   document.querySelectorAll("header button[data-model]").forEach(b =>
     b.classList.toggle("on", b.dataset.model === name));
   badge.textContent = cfg.badge;
@@ -703,19 +722,27 @@ async function selectModel(name) {
   replayBtn.hidden = name !== "insert";
   try {
     const { json, bin } = await loadGLB(cfg.src);
+    if (seq !== loadSeq) return;
     scene = buildScene(json, bin);
     prepare(scene);
+    if (name === "inner") {
+      shellToggle.checked = shellShown;
+      setShellVisible(shellShown);
+    }
     const b = computeBounds(scene);
     camera.target = b.center;
     camera.dist = Math.max(0.16, b.size * 2.4);
-    if (name === "ball") { camera.yaw = EMBED ? 180 : 35; camera.pitch = EMBED ? 8 : 22; }
+    if (name === "ball" || name === "inner") { camera.yaw = EMBED ? 180 : 35; camera.pitch = EMBED ? 8 : 22; }
     else if (name === "insert") { camera.yaw = 25; camera.pitch = 14; }
     else { camera.yaw = 35; camera.pitch = 18; }
     if (DEBUG) {
       initDebug();
       if (debugTele) applyTelemetry(debugTele);
     }
-    if (!EMBED) buildDots(HOTSPOTS[name]);
+    if (!EMBED) {
+      if (HOTSPOTS[name]) buildDots(HOTSPOTS[name]);
+      else clearDots();
+    }
     animStart = performance.now() / 1000;
     animPlaying = name === "insert";
     statusEl.textContent = name === "insert" ? "30 帧压入" : "滚轮缩放";
@@ -724,6 +751,24 @@ async function selectModel(name) {
     console.error(err);
   }
 }
+
+const EXTERNAL_RE = /^(shell_|window_|px_|spk_\d|ir_port_|vent_|usb_|reset_pin|status_|power_)/;
+const INNER_HIDE_RE = /_clamp\d|^mic_/;
+
+function setShellVisible(show) {
+  if (!scene) return;
+  for (const n of scene.nodes) {
+    const name = n.name || "";
+    if (EXTERNAL_RE.test(name)) n.hidden = !show;
+    else if (!show && INNER_HIDE_RE.test(name)) n.hidden = true;
+    else n.hidden = false;
+  }
+}
+
+shellToggle.addEventListener("change", () => {
+  shellShown = shellToggle.checked;
+  setShellVisible(shellShown);
+});
 
 document.querySelectorAll("header button[data-model]").forEach(b =>
   b.addEventListener("click", () => selectModel(b.dataset.model)));
