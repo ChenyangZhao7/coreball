@@ -263,6 +263,7 @@
     font-size: 13px;
   }
   .pad button:disabled { opacity: .4; cursor: not-allowed; }
+  .padhint { margin: -4px 0 8px; text-align: center; }
   .pad .up { grid-area: 1 / 2; }
   .pad .left { grid-area: 2 / 1; }
   .pad .center { grid-area: 2 / 2; }
@@ -463,6 +464,7 @@
         <button data-jog="d" class="right" title="右（D）">→<small>右</small></button>
         <button data-jog="s" class="down" title="后（S）">↓<small>后</small></button>
       </div>
+      <p class="hint padhint">3D 视角左右按屏幕；2D 地图按世界方向</p>
       <div class="height">
         <button data-jog="q" title="下降（Q）">−</button>
         <div class="heightmid">
@@ -583,6 +585,14 @@ function clampZ(z) {
   return Math.max(900, Math.min(1500, Number.isFinite(n) ? n : 1300));
 }
 
+// 3D 工位默认从人的背后看，屏幕左右和世界 x 相反；
+// 2D 地图 x 向右，保持世界方向。
+function controlVector(v, view) {
+  const out = [Number(v[0]) || 0, Number(v[1]) || 0, Number(v[2]) || 0];
+  if (view === '3d') out[0] = out[0] ? -out[0] : 0;
+  return out;
+}
+
 // 演示模式：按速度直线靠近目标
 function stepToward(pos, target, speed, dt) {
   const p = (pos || [0, 0, 0]).map(Number);
@@ -596,14 +606,14 @@ function stepToward(pos, target, speed, dt) {
 }
 
 globalThis.ConsoleCore = {
-  KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, clampZ, stepToward,
+  KEY_DIR, MAX_SPEED, MIN_SPEED, jogVector, clampFloor, clampZ, controlVector, stepToward,
   PARAMS, applyParams,
 };
 </script>
 
 <script>
 (() => {
-const { jogVector, clampFloor, clampZ, stepToward, PARAMS } = ConsoleCore;
+const { jogVector, clampFloor, clampZ, controlVector, stepToward, PARAMS } = ConsoleCore;
 
 // ---------------- 常量 ----------------
 const NEAR = [-380, 520, 1300];
@@ -1354,7 +1364,7 @@ async function poll(force = false) {
 
 function jogTick() {
   if (state.mode === 'offline' || state.mode === 'connecting') return;
-  const v = jogVector(keys, state.speed);
+  const v = controlVector(jogVector(keys, state.speed), state.view);
   const active = v.some(x => x !== 0);
   if (!active && !jogWasOn) return;
   if (state.mode === 'demo') {

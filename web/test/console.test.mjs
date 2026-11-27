@@ -49,6 +49,12 @@ test('高度夹在 900–1500', () => {
   assert.equal(C.clampZ(1300), 1300);
 });
 
+test('3D 视角下左右按屏幕方向', () => {
+  assert.deepEqual(C.controlVector([240, 0, 0], '3d'), [-240, 0, 0]);
+  assert.deepEqual(C.controlVector([240, 0, 0], '2d'), [240, 0, 0]);
+  assert.deepEqual(C.controlVector([0, -240, 120], '3d'), [0, -240, 120]);
+});
+
 test('演示模式按速度靠近目标', () => {
   assert.deepEqual(C.stepToward([0, 0, 0], [100, 0, 0], 100, 0.1), [10, 0, 0]);
   assert.deepEqual(C.stepToward([0, 0, 0], [1, 0, 0], 100, 0.1), [1, 0, 0]);
