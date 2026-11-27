@@ -116,6 +116,19 @@ python tools\storyboard.py
 & $B --background --python tools\export_insert.py   # 插头压入动画
 ```
 
+## 独立安装包（Windows，含 Blender）
+
+```powershell
+python tools\package_app.py
+```
+
+产物是 `dist\CoreBall\`（约 1.1 GB，内含 Blender 4.5.16、场景、网页和摄像头运行时）：
+
+- 把整个文件夹压缩后发给别人；对方解压后双击 `Install-CoreBall.bat`；
+- 安装到 `%LOCALAPPDATA%\CoreBall`，创建桌面 / 开始菜单快捷方式，不需要对方装 Python 或 Blender；
+- 打开后左边实时画面、右边操作台；摄像头开关、快速动作、3D/2D 都在；
+- 这是**本机独立版**：Blender 仿真跑在对方电脑上；要控制你这台主机上的实体，需要另做联网瘦客户端。
+
 ## 协议模拟（不用硬件）
 
 ```powershell

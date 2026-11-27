@@ -18,9 +18,6 @@ import time
 
 try:
     import cv2
-    import mediapipe as mp
-    from mediapipe.tasks import python as mpp
-    from mediapipe.tasks.python import vision
 except Exception as e:
     print("NO_DEPS:", e)
     sys.exit(3)
@@ -77,6 +74,16 @@ def worker(camera=0, raw=False):
             if not raw and landmarker is None:
                 if not os.path.exists(MODEL):
                     LATEST["note"] = "NO_MODEL"
+                    cap.release()
+                    cap = None
+                    time.sleep(1.0)
+                    continue
+                try:
+                    import mediapipe as mp
+                    from mediapipe.tasks import python as mpp
+                    from mediapipe.tasks.python import vision
+                except Exception:
+                    LATEST["note"] = "NO_DEPS"
                     cap.release()
                     cap = None
                     time.sleep(1.0)

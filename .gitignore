@@ -11,3 +11,5 @@ memory/
 voice.json
 
 out/sim/
+dist/
+build/
