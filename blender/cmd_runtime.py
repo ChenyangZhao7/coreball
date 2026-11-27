@@ -227,7 +227,7 @@ def face_person():
     if t is None or head is None:
         return
     d = head.matrix_world.translation - t.matrix_world.translation
-    yaw = math.atan2(d.x, d.y)          # 脸朝 +Y
+    yaw = BODYMAP.face_yaw(d.x, d.y)    # 脸窗在 +Y；绕 Z 正转会把 +Y 转到 −X
     if BODY["active"] == "winch":
         br = bpy.data.objects.get("ball_root")
         if br is not None:

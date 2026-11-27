@@ -409,7 +409,7 @@
 <main>
   <section id="stage" class="stage view-3d">
     <canvas id="cv" aria-label="2D 工位地图"></canvas>
-    <iframe id="rig3d" src="viewer.html?embed=1&amp;debug=rig" title="3D 工位"></iframe>
+    <iframe id="rig3d" src="viewer.html?embed=1&amp;debug=rig&amp;v=2" title="3D 工位"></iframe>
 
     <div class="hud">
       <div id="stateLabel" class="state">等待连接</div>
@@ -1074,7 +1074,8 @@ function demoIntent(msg) {
       else if (name === 'look') {
         d.target = p.slice();
         d.expr = 'listening';
-        d.yaw = 0;
+        // 演示里也真的转向人：人站在 (0, 890)
+        d.yaw = Math.atan2(p[0], 890 - p[1]);
       }
       if (name !== 'look') d.expr = 'acting';
       state.target = d.target.slice();

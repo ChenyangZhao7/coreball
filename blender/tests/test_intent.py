@@ -151,9 +151,12 @@ if abs(((g["point"][0] ** 2 + (g["point"][1] - 890.0) ** 2) ** 0.5) - 210.0) > 1
 g = route_intent(A, {"intent": "goto", "point": [2000, 1200, 1300]}, pts, [0, 0, 0])
 if g["point"][:2] != [775.0, 1055.0]:
     fail("goto 没被墙夹紧：%s" % (g["point"],))
-g = route_intent(A, {"intent": "left"}, pts, [775.0, 520.0, 1300.0])
+g = route_intent(A, {"intent": "right"}, pts, [775.0, 520.0, 1300.0])
 if g["kind"] != "move" or g["point"][0] != 775.0:
-    fail("相对移动没被墙夹紧：%s" % (g,))
+    fail("右移没被墙夹紧：%s" % (g,))
+g = route_intent(A, {"intent": "left"}, pts, [-775.0, 520.0, 1300.0])
+if g["kind"] != "move" or g["point"][0] != -775.0:
+    fail("左移没被墙夹紧：%s" % (g,))
 if route_intent(A, {"intent": "goto", "point": [1, 2]}, pts, [0, 0, 0])["kind"] != "bad_target":
     fail("坏 goto 没拒绝")
 if route_intent(A, {"intent": "expression", "name": "acting"}, pts, [0, 0, 0])["kind"] != "expression":
@@ -172,7 +175,7 @@ bpy.data.objects["CMD_TARGET"].location = (-0.380, 0.520, 1.300)
 bpy.context.view_layer.update()
 face_person()
 yaw = bpy.data.objects["ball_root"].rotation_euler.z
-fwd = Vector((math.sin(yaw), math.cos(yaw), 0.0))
+fwd = Vector((-math.sin(yaw), math.cos(yaw), 0.0))
 head = bpy.data.objects["PERSON_HEAD"].matrix_world.translation
 ball = bpy.data.objects["CMD_TARGET"].matrix_world.translation
 d = head - ball

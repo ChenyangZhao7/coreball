@@ -32,9 +32,14 @@ if "升降" not in r["reason"]:
 eq(body.map_intent("winch", "come", PTS, [0, 0, 0])["point"], PTS["near"], "吊索 come")
 eq(body.map_intent("rover", "come", PTS, [0, 0, 0])["point"], PTS["rover_near"], "小车 come")
 
-# 相对位移
+# 相对位移：左 = −x，右 = +x（和 2D 地图、坐姿用户一致）
 eq(body.map_intent("winch", "up", PTS, [0, 0, 1000])["point"], [0.0, 0.0, 1120.0], "吊索 up +120")
-eq(body.map_intent("rover", "left", PTS, [0, 0, 0])["point"], [120.0, 0.0, 0.0], "小车 left +120")
+eq(body.map_intent("winch", "left", PTS, [0, 0, 0])["point"], [-120.0, 0.0, 0.0], "吊索 left −120")
+eq(body.map_intent("winch", "right", PTS, [0, 0, 0])["point"], [120.0, 0.0, 0.0], "吊索 right +120")
+
+# 脸窗在本地 +Y；Blender 绕 Z 正转把 +Y 转到 (−sin, cos)
+eq(round(body.face_yaw(380.0, 370.0), 4), -0.7987, "脸朝向 +x/+y")
+eq(round(body.face_yaw(-380.0, 370.0), 4), 0.7987, "脸朝向 −x/+y")
 
 # 其他
 eq(body.map_intent("winch", "look", PTS, [0, 0, 0])["kind"], "face", "look")

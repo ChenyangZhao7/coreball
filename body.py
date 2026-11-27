@@ -3,6 +3,7 @@
 核心只发意图（come / look / stop ...），由这里决定这个身体能不能做、怎么做。
 新增一个载体 = 在 BODIES 里加一项，不改核心。
 """
+import math
 
 BODIES = {
     "winch": {
@@ -36,6 +37,14 @@ def supports(body, intent):
     return intent in (BODIES.get(body) or {}).get("can", set())
 
 
+def face_yaw(dx, dy):
+    """球脸窗在本地 +Y；Blender 绕 Z 正转把 +Y 转到 (−sin, cos)。
+
+    dx / dy 是「目标点 → 人」的方向。返回值直接赋给 ball_root.rotation_euler.z。
+    """
+    return math.atan2(-dx, dy)
+
+
 def map_intent(body, intent, points, current_mm):
     """返回 {kind: move/face/hold/refuse}。未知意图返回 None。"""
     if body not in BODIES:
@@ -57,7 +66,8 @@ def map_intent(body, intent, points, current_mm):
         return {"kind": "move", "point": [current_mm[0], current_mm[1], current_mm[2] + dz]}
 
     if intent in ("left", "right"):
-        dx = 120.0 if intent == "left" else -120.0
+        # 左 = −x，右 = +x：和 2D 地图、坐姿用户的左右一致
+        dx = -120.0 if intent == "left" else 120.0
         return {"kind": "move", "point": [current_mm[0] + dx, current_mm[1], current_mm[2]]}
 
     if intent == "look":
