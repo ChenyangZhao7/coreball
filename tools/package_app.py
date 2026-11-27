@@ -157,8 +157,16 @@ def main():
     build_exe()
     build_scripts()
     size = sum(p.stat().st_size for p in OUT.rglob("*") if p.is_file()) / 1024 / 1024
+    zip_path = OUT.parent / "CoreBall-standalone.zip"
+    if zip_path.exists():
+        zip_path.unlink()
+    print("打包 ZIP ->", zip_path)
+    subprocess.run(["tar", "-a", "-c", "-f", str(zip_path), "-C", str(OUT.parent), "CoreBall"],
+                   check=True)
+    zsize = zip_path.stat().st_size / 1024 / 1024
     print("完成：%s（%.0f MB）" % (OUT, size))
-    print("把整个 dist\\CoreBall 文件夹压缩后发给别人；对方解压后运行 Install-CoreBall.bat。")
+    print("压缩包：%s（%.0f MB）" % (zip_path, zsize))
+    print("把 ZIP 发给别人；对方解压后运行 Install-CoreBall.bat。")
 
 
 if __name__ == "__main__":

@@ -118,9 +118,9 @@ Re-export after a model change:
 python tools\package_app.py
 ```
 
-The result is `dist\CoreBall\` (about 1.1 GB: Blender 4.5.16, the scene, the web UI and the camera runtime):
+The result is `dist\CoreBall\` (about 1.1 GB: Blender 4.5.16, the scene, the web UI and the camera runtime) and `dist\CoreBall-standalone.zip` (about 470 MB):
 
-- ZIP the whole folder and send it; the recipient extracts it and double-clicks `Install-CoreBall.bat`;
+- Send the ZIP; the recipient extracts it and double-clicks `Install-CoreBall.bat`;
 - It installs to `%LOCALAPPDATA%\CoreBall`, creates desktop / Start Menu shortcuts, and needs neither Python nor Blender on the target machine;
 - The app opens with the live camera on the left and the console on the right;
 - This is a **local standalone build**: Blender runs on the recipient's machine. Controlling your host's physical rig needs a separate networked thin client.
